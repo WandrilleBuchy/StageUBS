@@ -1,5 +1,5 @@
 ---
-title: "R Notebook"
+title: "Stage"
 output: html_notebook
 ---
 
@@ -9,54 +9,126 @@ output: html_notebook
 ```{r}
 
 library(ggplot2)
+library(plot3D)
 
 ```
 
 
 
-```{r création de données}
+```{r création de données en dimension simple}
 
+#paramètres
 size <- 1000
 mean <- 0
 sd <- 3
 meanErr <- 0.5
 sdErr <- 1
 
-base <- rnorm(size, mean, sd)
-err <- rnorm(size, meanErr, sdErr) 
-data <- base + err
-
-df <- data.frame(value = data)
-
-```
-
-```{r représentation data}
-
-plot(df$value,type = 'l')
-
-```
-
-C'est bien un bruit blanc.
-
-```{r}
-
-gra <- function(x,mean = mean, sd = sd){
-  return(dnorm(x,mean = mean, sd = sd) * size)
+Crea_Data1D <- function(size, mean, sd, meanErr, sdErr){
+  #création des X cachés et des erreurs
+  hidden1D <- data.frame(value = rnorm(size, mean, sd))
+  err1D <- data.frame(value = rnorm(size, meanErr, sdErr)) 
+  
+  
+  #récupération des observations
+  df1D <- data.frame(value = hidden1D + err1D)
+  out <- list(df1D = df1D, hidden1D = hidden1D, err1D = err1D)
+  return(out)
 }
-ggplot(aes(x = value),data = df) +
+
+Data1 <- Crea_Data1D(size, mean, sd, meanErr, sdErr)
+
+```
+
+```{r représentation data simple}
+
+plot(Data1$df1D$value,type = 'l')
+
+```
+
+Il s'agit bien un bruit blanc.
+
+```{r représentation pour le cas avec peu de variation sur l erreur}
+
+#fonction gaussienne de la somme des termes erreur + obs cachées
+gra <- function(x,mean = mean, sd = sd){
+  return(dnorm(x,mean = mean, sd = sd) * 2*size)
+}
+
+
+#représentation graphique pour une variance faible de l'erreur
+ggplot(aes(x = value),data = Data1$df1D) +
   geom_histogram(show.legend = FALSE, binwidth = 2, fill = "lightblue3", col = 'black') +
-  ggtitle("Répartition des points étudiés") +
-  stat_function(fun = gra , args = list(mean = mean, sd = sd), color = "red", size = 1)
+  ggtitle("Répartition des points étudiés pour une variance faible de l'erreur") +
+  stat_function(fun = gra , args = list(mean = mean, sd = sd), color = "red", linewidth = 1)
+
+```
+
+Nous voyons qu'il n'y a que peu de variation que nous avons toujours une gaussienne qui s'approche de la gaussienne des observations cachées
+
+```{r représentation pour le cas avec beaucoup de variation sur l erreur}
+
+#création des données pour une variance de l'erreur de 25 au lieu de 1
+Data2 <- Crea_Data1D(size, mean, sd, meanErr, 5)
+
+#représentation graphique pour une variance forte de l'erreur
+ggplot(aes(x = value),data = Data2$df1D) +
+  geom_histogram(show.legend = FALSE, binwidth = 2, fill = "lightblue3", col = 'black') +
+  ggtitle("Répartition des points étudiés pour une variance forte de l'erreur") +
+  stat_function(fun = gra , args = list(mean = mean, sd = sd), color = "red", linewidth = 1)
+
+
+```
+
+Nous voyons que la courbe s'aplatit donc nous ne sommes plus du tout sur la même gaussienne et si nous n'avions pas la théorie, il n'aurait pas été dit qu'il s'agisse d'une gaussienne du tout.
+
+```{r création de données en dimensions multiples}
+
+Crea_Data2D <- function(dim, size, mean, sd, meanErr, sdErr){
+  
+  #création des données pour dim dimensions
+  hidden2D <- data.frame(rnorm(size, mean[1], sd[1])) #initialisation des observations cachées
+  err2D <- data.frame(rnorm(size, meanErr[1], sdErr[1])) #initialisation des erreurs
+  
+  for (i in 2:dim ){
+    hidden2D <- cbind(hidden2D, rnorm(size, mean[i], sd[i])) #ajout d'une dimension d'observations cachées
+    err2D <- cbind(err2D, rnorm(size, meanErr[i], sdErr[i])) #ajout d'une dimension d'erreur
+  }
+  
+  
+  #récupération des observations
+  df2D <- data.frame(value = hidden2D + err2D)
+  out <- list(df2D = df2D, hidden2D = hidden2D, err2D = err2D)
+  return(out)
+  
+}  
+
+#paramètres
+dim <- 2
+meanDim <- c(0,0)
+sdDim <- c(3,3)
+meanErrDim <- c(0.5,1)
+sdErrDim <- c(1,1)
+
+Data3 <- Crea_Data2D(dim, size, meanDim, sdDim, meanErrDim, sdErrDim)
+
 ```
 
 
-```{r}
+```{r représentation des données en dimensions multiples}
 
-base2d <- c(rnorm(size, mean, sd),rnorm(size, mean, sd))
-err2d <- c(rnorm(size, meanErr, sdErr),rnorm(size, meanErr, sdErr))
-data2d <- base2d + err2d
+#séparation des données en intervalles
+x_c <- cut(Data3$df2D$value.rnorm.size..mean.1...sd.1.., 20)
+y_c <- cut(Data3$df2D$value.rnorm.size..mean.i...sd.i.., 20)
 
-df2d <- data.frame(value = data2d)
+#jointure des données
+z <- table(x_c, y_c)
+
+#représentation de l'histogramme 3D
+hist3D(z=z, border="black")
+
+#représentation en hitmap
+image2D(z=z, border="black")
 
 ```
 
