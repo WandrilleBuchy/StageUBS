@@ -1,0 +1,62 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+#Kalman Filter
+
+
+```{r}
+
+library(ggplot2)
+
+```
+
+
+
+```{r création de données}
+
+size <- 1000
+mean <- 0
+sd <- 3
+meanErr <- 0.5
+sdErr <- 1
+
+base <- rnorm(size, mean, sd)
+err <- rnorm(size, meanErr, sdErr) 
+data <- base + err
+
+df <- data.frame(value = data)
+
+```
+
+```{r représentation data}
+
+plot(df$value,type = 'l')
+
+```
+
+C'est bien un bruit blanc.
+
+```{r}
+
+gra <- function(x,mean = mean, sd = sd){
+  return(dnorm(x,mean = mean, sd = sd) * size)
+}
+ggplot(aes(x = value),data = df) +
+  geom_histogram(show.legend = FALSE, binwidth = 2, fill = "lightblue3", col = 'black') +
+  ggtitle("Répartition des points étudiés") +
+  stat_function(fun = gra , args = list(mean = mean, sd = sd), color = "red", size = 1)
+```
+
+
+```{r}
+
+base2d <- c(rnorm(size, mean, sd),rnorm(size, mean, sd))
+err2d <- c(rnorm(size, meanErr, sdErr),rnorm(size, meanErr, sdErr))
+data2d <- base2d + err2d
+
+df2d <- data.frame(value = data2d)
+
+```
+
