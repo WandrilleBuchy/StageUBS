@@ -1,0 +1,144 @@
+---
+title: "Stage UBS"
+author: "Wandrille Buchy"
+format: html
+editor: visual
+---
+
+## Introduction
+
+L'objectif est d'implémenter le filtre de Kalman. Pour cela, nous nous intéressons au *Hidden Markov Model* ou *HMM* représenté ci-bas avec les notations suivantes pour le modèle de dimension une :
+
+![Figure 1 : Schéma du Hidden Markov Model](Schéma%20HHM.png){fig-align="center"}
+
+-   $X_{\text{i}}$ est la loi du i-ème évènement réellement passé du modèle. Cet évènement est caché et un objectif sera d'obtenir sa loi conditionnelle sachant un ou plusieurs $Y_{\text{i}}$. Nous nous intéresserons à la loi de transition de densité $p(x_{\text{i}} \mid x_{\text{i-1}})$ qui est représentée sur la figure par les flèches continues passant de $x_{\text{i-1}}$ à $x_{\text{i}}$ . $X_{\text{0}}$ initialise le modèle comme suivant :
+
+    $$
+    X_{\text{0}}\sim \mathcal{N}(\mu, \sigma^2)
+    $$
+
+    avec $\mu$ la moyenne des valeurs prises par $X_{\text{0}}$ et $\sigma^2$ pour sa variance.
+
+-   Loi conditionnelle de $Y_{\text{i}}$ sachant $X_{\text{i}}$
+
+    $$
+    Y_{\text{i}}\mid X_{\text{i}} \sim \mathcal{N}(aX_{\text{i}} + b, \sigma_{\text{err}}^2)
+    $$
+
+    avec $a$ et $b$ des paramètres du modèle linéaire gaussien et $\sigma_{\text{err}}^2$ la variance du bruit subit. Cette loi est représentée par les flèches pointillées sur la figure.
+
+-   $Y_{\text{i}}$ est la loi des observations que nous avons réellement; il s'agit de données récoltées de $X_{\text{i}}$ avec un bruit qui sont données par la loi
+
+    $$
+    Y_{\text{i}}\sim \mathcal{N}(a\mu + b , a²\sigma^2 + \sigma_{\text{err}}^2)
+    $$
+
+    cette loi à pu être récupérée grâce aux deux précédentes.
+
+Ceci nous permet d'étudier le modèle pour une dimension.
+
+Nous allons maintenant repréciser les loi pour $n$ dimensions.
+
+```{r initialisation}
+
+library(ggplot2)
+library(plot3D)
+
+```
+
+```{r création de la fonction de génération des données pour tout choix de dimensions}
+
+#fonction de création des données
+Crea_Data <- function(size, mean, sd, sdErr, a = 1, b = 0, dim = 1){
+  
+  hidden_list <- list() #initialisation des observations cachées
+  err_list <- list() #initialisation des erreurs
+  
+    for (i in seq(dim)){
+      hidden_list[[i]] <- rnorm(size, mean[i], sd[i]) #ajout d'une dimension d'observations cachées
+      err_list[[i]] <- rnorm(size, a * mean[i] + b, sdErr[i]) #ajout d'une dimension d'erreur
+    }
+  
+  
+  #récupération des observations
+  col_names <- paste0("dim", seq(dim)) #creation de la colonne de nom
+  hidden <- as.data.frame(hidden_list) 
+  colnames(hidden) <- col_names #application de la colonne de nom sur hidden
+  
+  
+  err <- as.data.frame(err_list)
+  colnames(err) <- col_names #application de la colonne de nom sur err
+  
+  
+  df <- hidden + err
+  df <- as.data.frame(df)
+  colnames(df) <- col_names #application de la colonne de nom sur df
+  
+  out <- list(df = df, hidden = hidden, err = err)
+  return(out)
+  
+}  
+
+```
+
+```{r création des données en dimension unique}
+
+#paramètres
+size <- 1000
+mu <- 0
+sigma2 <- 9
+sigma2Err <- 1
+a <- 3
+b <- 5
+
+Data1 <- Crea_Data(size, mu, sqrt(sigma2), sqrt(sigma2Err), a, b) # voici les données; ici les yi
+
+```
+
+```{r représentation des données pour une seule dimension}
+
+#fonction gaussienne de la somme des termes erreur + obs cachées
+Y_densite <- function(x, mean, sd, sdErr, a = 1, b = 0){
+  return(dnorm(x, mean = a * mean + b , sd = sqrt(a * a * sd + sdErr)) * 2 * size)
+}
+
+
+#représentation graphique pour une variance faible de l'erreur
+ggplot(aes(x = dim1),data = Data1$df) +
+  geom_histogram(show.legend = FALSE, binwidth = 2, fill = "lightblue3", col = 'black') +
+  ggtitle("Histogramme de la répartition des observations effectivement observées") +
+  stat_function(fun = Y_densite , args = list(mean = mu, sd = sqrt(sigma2), sdErr = sqrt(sigma2Err), a = a, b = b), aes(color = "Densité du tirage de Y"), linewidth = 1) +
+  scale_color_manual(name = "Légende", values = c("Densité du tirage de Y" = "red"))+
+  labs(x = "Valeur des observations Y", y = "Comptage des observations Y")
+
+
+```
+
+```{r création des données en dimension multiple}
+
+#paramètres
+dim <- 2
+muDim <- c(0,0)
+sigma2Dim <- c(9,9)
+sigma2ErrDim <- c(1,1)
+
+Data2 <- Crea_Data(size, muDim, sqrt(sigma2Dim), sqrt(sigma2ErrDim), a, b, dim = 2)
+
+```
+
+```{r représentation des données pour des dimensions mulitples}
+
+#séparation des données en intervalles
+x_c <- cut(Data2$df$dim1, 20)
+y_c <- cut(Data2$df$dim2, 20)
+
+#jointure des données
+z <- table(x_c, y_c)
+
+#représentation de l'histogramme 3D
+hist3D(z=z, border="black", main = "Histogramme 3D de la répartition des données effectivement observées", xlab = "Valeur dim 1 de Y", ylab = "Valeur dim 2 de Y", zlab = "Comptage")
+
+#représentation en hitmap
+image2D(z=z, border="black",main = "Heatmap de la répartition des données effectivement observées", xlab = "Valeur dim 1 de Y", ylab = "Valeur dim 2 de Y")
+
+```
