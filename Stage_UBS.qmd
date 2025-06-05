@@ -1,0 +1,311 @@
+---
+title: "Stage UBS"
+author: "Wandrille Buchy"
+format: html
+editor: visual
+---
+
+## Introduction
+
+L'objectif est d'implémenter le filtre de Kalman. Pour cela, nous nous intéressons au *Hidden Markov Model* ou *HMM* représenté ci-bas avec les notations suivantes pour le modèle de dimension une :
+
+![Figure 1 : Représentation de notre Hidden Markov Model](images/Schéma%20HHM.png){fig-align="center"}
+
+-   $X_{\text{i}}$ est la loi de l'état du système a l'instant i du modèle. Cet état est caché et un objectif sera d'obtenir sa loi conditionnelle sachant un ou plusieurs $Y_{\text{i}}$ qui sont les mesures prises des états. Nous nous intéresserons à la loi de transition de densité $p(x_{\text{i}} \mid x_{\text{i-1}})$ qui est représentée sur la figure par les flèches continues passant de $x_{\text{i-1}}$ à $x_{\text{i}}$. Nous supposons qu'elle est de la forme
+
+    #### $$
+    X_{\text{i}} \mid X_{\text{i-1}}\sim \mathcal{N}(\alpha X_{\text{i-1}} + \beta, \sigma_{\text{trans}}^2)
+    $$
+
+    Avec $\alpha$ et $\beta$ des paramètres du modèle linéaire gaussien et $\sigma_{\text{trans}}^2$ la variance de la transition entre les états du système. On comprend aussi qu'il n'y a pas d'indépendance entre les $X_{\text{i}}$. $X_{\text{0}}$ initialise le modèle comme suivant :
+
+    $$
+    X_{\text{0}}\sim \mathcal{N}(\mu, \sigma^2)
+    $$
+
+    avec $\mu$ la moyenne des valeurs prises par $X_{\text{0}}$ et $\sigma^2$ pour sa variance.
+
+-   Loi conditionnelle de $Y_{\text{i}}$ sachant $X_{\text{i}}$
+
+    $$
+    Y_{\text{i}}\mid X_{\text{i}} \sim \mathcal{N}(aX_{\text{i}} + b, \sigma_{\text{err}}^2)
+    $$
+
+    avec $a$ et $b$ des paramètres du modèle linéaire gaussien et $\sigma_{\text{err}}^2$ la variance du bruit subit. Cette loi est représentée par les flèches pointillées sur la figure.
+
+-   $Y_{\text{i}}$ est la loi des mesures du modèle que nous avons; il s'agit de données récoltées de $X_{\text{i}}$ avec un bruit qui sont données par la loi
+
+    $$
+    Y_{\text{i}}\sim \mathcal{N}(a\mu + b , a²\sigma^2 + \sigma_{\text{err}}^2)
+    $$
+
+    cette loi à pu être récupérée grâce aux deux précédentes.
+
+Ceci nous permet d'étudier le modèle pour une dimension.
+
+Nous allons maintenant repréciser les loi pour de multiples dimensions.
+
+-   Premièrement, $X_{\text{i}}$ à valeur dans $\mathbb{R}^d$ admet une loi de transition sous la forme
+
+    $$
+    X_{\text{i}} \mid X_{\text{i-1}}\sim \mathcal{N}(F X_{\text{i-1}},Q)
+    $$
+
+    avec $F \in \mathbb{R}^{d \times d}$ une matrice arbitraire paramètre du modèle linéaire gaussien et $Q \in \mathbb{R}^{d \times d}$ une matrice de covariance et est donc dans notre cas symétrique définie positive. De même que pour une seule dimension, nous initialisons $X_{\text{0}}$ avec une gaussienne
+
+    $$
+    X_{\text{0}}\sim \mathcal{N}(\mu, V_{\text{0}})
+    $$
+
+    pour un $\mu \in \mathbb{R}^d$ l'espérance de la variable aléatoire et $V_{\text{0}}$ la matrice de covariance symétrique définie positive initiale.
+
+-   Ensuite vient la loi conditionnelle de $Y_{\text{i}}$ sachant $X_{\text{i}}$ à valeur dans $\mathbb{R}^D$
+
+    $$
+    Y_{\text{i}}\mid X_{\text{i}} \sim \mathcal{N}(HX_{\text{i}},R)
+    $$
+
+    avec $H \in \mathbb{R}^{D \times d}$ la matrice paramètre du modèle linéaire gaussien et $R \in \mathbb{R}^{D \times D}$ la matrice de covariance comme les autres symétrique et définie postive.
+
+-   Enfin $Y_{\text{i}}$ à valeur dans $\mathbb{R}^D$ définie comme telle
+
+    $$
+    Y_{\text{i}}\sim \mathcal{N}(A\mu, AV_{\text{0}}A^T +R)
+    $$
+
+Une fois que nous avons posé le cadre, nous étudions le modèle.
+
+## Creation des données
+
+```{r initialisation}
+#| echo: false
+
+library(ggplot2)
+library(plot3D)
+
+```
+
+```{r création de la fonction de génération des données pour tout choix de dimensions}
+
+#fonction de création des données
+Crea_Data <- function(size, mean, sigma2, sigma2Trans, sigma2Err, a, b, alpha, beta, dimState = 1, dimMes = 1){
+  
+  
+  
+  #fonction subsidiaire pour calculer le carré d'une matrice
+  matCarre <- function(A){
+    
+    y = eigen(A)
+    MCV <- matrix(y$vectors,byrow=F,ncol=dim(A)[1]) #matrice orthogonale de vecteurs propres
+    MCVinv <- t(MCV) #transposée de matrice de vecteur propre
+    Diag <- diag(y$values) #matrice diagonale des valeurs propres
+    DiagCalc <- diag(sqrt(y$values)) # matrice diagonale racine carrée des valeurs propres
+    sqrt <- MCV %*% DiagCalc #racine carrée de la matrice argument
+    
+    out <- list(sqrt = sqrt, diag = Diag, base = MCV)
+    return(out)
+  }
+  
+  
+  #fonction subsidiaire pour créer un échantillon d'une loi de normale multivariée
+  multiNorm <- function(size, mean, sigma2){
+    
+    vect <- rnorm(size) #tirage selon loi normale centrée réduite
+    carre <- matCarre(sigma2) #récupération du carré de la matrice de covariance
+    return(mean + carre$sqrt %*% vect) #simulation de l'échantillon multivarié
+  }
+  
+  
+  
+  
+  hidden_list <- list() #initialisation des observations cachées
+  mes_list <- list() #initialisation des observations effectives
+  
+  
+  
+  #Cas dimension 1
+  if(dimState == dimMes && dimMes == 1){ #verification de la dimension
+    
+    hidden_list[[1]] <- rnorm(1, mean, sqrt(sigma2)) #premiere observation cachée
+    mes_list[[1]] <- rnorm(1, a * hidden_list[[1]] + b, sqrt(sigma2Err)) #premiere observation effective
+    
+    for (i in 2:size){
+      hidden_list[[i]] <- rnorm(1, alpha * hidden_list[[i-1]] + beta, sqrt(sigma2Trans)) #ajout des observations cachées
+      mes_list[[i]] <- rnorm(1, a * hidden_list[[i]] + b, sqrt(sigma2Err)) #ajout des observations effectives
+    }
+    
+    
+    #récupération des observations
+    hidden <- data.frame(hid_val = hidden_list) 
+    
+    df <- data.frame(value = mes_list)
+    
+    out <- list(df = df, hidden = hidden)
+    
+    return(out)
+  }
+  
+  
+  
+  
+  #Cas dimension > 1
+  if (dimState > 1 && dimMes > 1){ #verification de la dimension
+    
+    hidden_list[[1]] <- multiNorm(dimState, mean, sigma2) #premiere observation cachée
+    mes_list[[1]] <- multiNorm(dimMes, a %*% hidden_list[[1]] + b, sigma2Err) #premiere observation effective
+    
+    for (i in 2:size){
+      
+      hidden_list[[i]] <- multiNorm(dimState, alpha %*% hidden_list[[i-1]] + beta, sigma2Trans) #ajout des observations cachées
+      mes_list[[i]] <- multiNorm(dimMes, a %*% hidden_list[[i]] + b, sigma2Err) #ajout des observations effectives
+      
+    }
+    
+    
+    #récupération des observations
+    hidden <- as.data.frame(hid_val = hidden_list) 
+    
+    df <- as.data.frame(value = mes_list)
+    
+    out <- list(df = df, hidden = hidden)
+    
+     return(out)
+    
+  }
+}  
+
+```
+
+```{r création des données en dimension unique}
+
+#paramètres
+size <- 1000
+mean <- 0
+sigma2 <- 3
+sigma2Trans <- 4
+sigma2Err <- 1
+a <- 3
+b <- 1
+alpha <- 1.2
+beta <- 1
+
+#Crea_Data => (size, mean, sigma2, sigma2Trans, sigma2Err, a, b, alpha, beta, dimState = 1, dimMes = 1)
+Data1 <- Crea_Data(size, mean, sigma2, sigma2Trans, sigma2Err, a, b, alpha, beta) # voici les données; ici les yi
+
+```
+
+Les données explosent. Je ne sais pas si c'est dû à mon code ou aux paramètres
+
+Je n'ai pas eu le temps de faire le reste
+```{r représentation des données pour une seule dimension}
+
+#fonction gaussienne de la somme des termes erreur + obs cachées
+Y_densite <- function(x, mean, sd, sdErr, a = 1, b = 0){
+  return(dnorm(x, mean = a * mean + b , sd = sqrt(a * a * sd + sdErr)) * 2 * size)
+}
+
+
+#représentation graphique pour une variance faible de l'erreur
+ggplot(aes(x = dim1),data = Data1$df) +
+  geom_histogram(show.legend = FALSE, binwidth = 2, fill = "lightblue3", col = 'black') +
+  ggtitle("Histogramme de la répartition des observations effectivement observées") +
+  stat_function(fun = Y_densite , args = list(mean = mu, sd = sqrt(sigma2), sdErr = sqrt(sigma2Err), a = a, b = b), aes(color = "Densité du tirage de Y"), linewidth = 1) +
+  scale_color_manual(name = "Légende", values = c("Densité du tirage de Y" = "red"))+
+  labs(x = "Valeur des observations Y", y = "Comptage des observations Y")
+
+
+```
+
+```{r création des données en dimension multiple}
+
+#paramètres
+dim <- 2
+muDim <- c(0,0)
+sigma2Dim <- c(9,9)
+sigma2ErrDim <- c(1,1)
+
+Data2 <- Crea_Data(size, muDim, sqrt(sigma2Dim), sqrt(sigma2ErrDim), a, b, dim = 2)
+
+```
+
+```{r représentation des données pour des dimensions mulitples}
+
+#séparation des données en intervalles
+x_c <- cut(Data2$df$dim1, 20)
+y_c <- cut(Data2$df$dim2, 20)
+
+#jointure des données
+z <- table(x_c, y_c)
+
+#représentation de l'histogramme 3D
+hist3D(z=z, border="black", main = "Histogramme 3D de la répartition des données effectivement observées", xlab = "Valeur dim 1 de Y", ylab = "Valeur dim 2 de Y", zlab = "Comptage")
+
+#représentation en hitmap
+image2D(z=z, border="black",main = "Heatmap de la répartition des données effectivement observées", xlab = "Valeur dim 1 de Y", ylab = "Valeur dim 2 de Y")
+
+```
+
+```{}
+```
+
+```{r tests et stockage de codes}
+
+A <- matrix(c(1,2,3,4),byrow=T,ncol=2)
+DD <- dim(A)[2]
+
+a <- c(1,2)
+b <- c(1,2)
+c <- A%*%a + b
+
+y = eigen(A)
+y$values #affiche les valeurs propres
+y$vectors #affiche les vecteurs propres
+
+
+matCarre <- function(A){
+  y = eigen(A)
+  MCV <- matrix(y$vectors,byrow=F,ncol=dim(A)[1])
+  MCVinv <- t(MCV)
+  Diag <- diag(y$values)
+  DiagCalc <- diag(sqrt(y$values))
+  sqrt <- MCV %*% DiagCalc
+  
+  out <- list(sqrt = sqrt, diag = Diag, base = MCV)
+  return(out)
+}
+
+multiNorm <- function(size, mean, sd){
+  vect <- rnorm(size)
+  carre <- matCarre(sd)
+  return(mean + carre$sqrt %*% vect)
+}
+
+#mtest <- c(1,1)
+#covtest <- matrix(c(2,1,1,2),byrow=T,ncol=2)
+#carre <- matCarre(covtest)
+#vect <- rnorm(2)
+#carre$sqrt
+multiNorm(2,mtest,covtest)
+
+
+
+
+
+
+
+ #récupération des observations
+  col_names <- paste0("dim", seq(dim)) #creation de la colonne de nom
+  hidden <- as.data.frame(hidden_list) 
+  colnames(hidden) <- col_names #application de la colonne de nom sur hidden
+  
+  
+  err <- as.data.frame(err_list)
+  colnames(err) <- col_names #application de la colonne de nom sur err
+  
+  
+  df <- hidden + err
+  df <- as.data.frame(df)
+  colnames(df) <- col_names #application de la colonne de nom sur df
+  
+  out <- list(df = df, hidden = hidden, err = err)
+```
