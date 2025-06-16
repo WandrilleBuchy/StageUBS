@@ -36,7 +36,7 @@ L'objectif est d'implémenter le filtre de Kalman. Pour cela, nous nous intéres
 -   $Y_{\text{i}}$ est la loi des mesures du modèle que nous avons; il s'agit de données récoltées de $X_{\text{i}}$ avec un bruit qui sont données par la loi
 
     $$
-    Y_{\text{i}}\sim \mathcal{N}(a\mu + b , a²\sigma^2 + \sigma_{\text{err}}^2)
+    Y_{\text{i}}\sim \mathcal{N}(a\mu + b , a^2\sigma^2 + \sigma_{\text{err}}^2)
     $$
 
     cette loi à pu être récupérée grâce aux deux précédentes.
@@ -75,237 +75,718 @@ Nous allons maintenant repréciser les loi pour de multiples dimensions.
 
 Une fois que nous avons posé le cadre, nous étudions le modèle.
 
-## Creation des données
+## Création des données
 
 ```{r initialisation}
 #| echo: false
 
 library(ggplot2)
 library(plot3D)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(tidyverse)
 
 ```
+
+Nous créons des fonctions qui nous serons utiles pour la suite. Une fonction *get_mat_sqrt* qui donne la racine carrée d'une matrice, *get_simulation* qui génère des donnés selon la loi de distribution précisée plus tôt et enfin la fonction *get_data* qui nous permet d'obtenir le nombre de données voulu.
 
 ```{r création de la fonction de génération des données pour tout choix de dimensions}
 
-#fonction de création des données
-Crea_Data <- function(size, mean, sigma2, sigma2Trans, sigma2Err, a, b, alpha, beta, dimState = 1, dimMes = 1){
-  
-  
-  
-  #fonction subsidiaire pour calculer le carré d'une matrice
-  matCarre <- function(A){
-    
-    y = eigen(A)
-    MCV <- matrix(y$vectors,byrow=F,ncol=dim(A)[1]) #matrice orthogonale de vecteurs propres
-    MCVinv <- t(MCV) #transposée de matrice de vecteur propre
-    Diag <- diag(y$values) #matrice diagonale des valeurs propres
-    DiagCalc <- diag(sqrt(y$values)) # matrice diagonale racine carrée des valeurs propres
-    sqrt <- MCV %*% DiagCalc #racine carrée de la matrice argument
-    
-    out <- list(sqrt = sqrt, diag = Diag, base = MCV)
-    return(out)
+#Fonction racine carrée de matrice
+get_mat_sqrt <- function(A){
+  if(is.null(dim(A))){
+    A <- matrix(A)
   }
-  
-  
-  #fonction subsidiaire pour créer un échantillon d'une loi de normale multivariée
-  multiNorm <- function(size, mean, sigma2){
-    
-    vect <- rnorm(size) #tirage selon loi normale centrée réduite
-    carre <- matCarre(sigma2) #récupération du carré de la matrice de covariance
-    return(mean + carre$sqrt %*% vect) #simulation de l'échantillon multivarié
-  }
-  
-  
-  
-  
-  hidden_list <- list() #initialisation des observations cachées
-  mes_list <- list() #initialisation des observations effectives
-  
-  
-  
-  #Cas dimension 1
-  if(dimState == dimMes && dimMes == 1){ #verification de la dimension
-    
-    hidden_list[[1]] <- rnorm(1, mean, sqrt(sigma2)) #premiere observation cachée
-    mes_list[[1]] <- rnorm(1, a * hidden_list[[1]] + b, sqrt(sigma2Err)) #premiere observation effective
-    
-    for (i in 2:size){
-      hidden_list[[i]] <- rnorm(1, alpha * hidden_list[[i-1]] + beta, sqrt(sigma2Trans)) #ajout des observations cachées
-      mes_list[[i]] <- rnorm(1, a * hidden_list[[i]] + b, sqrt(sigma2Err)) #ajout des observations effectives
-    }
-    
-    
-    #récupération des observations
-    hidden <- data.frame(hid_val = hidden_list) 
-    
-    df <- data.frame(value = mes_list)
-    
-    out <- list(df = df, hidden = hidden)
-    
-    return(out)
-  }
-  
-  
-  
-  
-  #Cas dimension > 1
-  if (dimState > 1 && dimMes > 1){ #verification de la dimension
-    
-    hidden_list[[1]] <- multiNorm(dimState, mean, sigma2) #premiere observation cachée
-    mes_list[[1]] <- multiNorm(dimMes, a %*% hidden_list[[1]] + b, sigma2Err) #premiere observation effective
-    
-    for (i in 2:size){
-      
-      hidden_list[[i]] <- multiNorm(dimState, alpha %*% hidden_list[[i-1]] + beta, sigma2Trans) #ajout des observations cachées
-      mes_list[[i]] <- multiNorm(dimMes, a %*% hidden_list[[i]] + b, sigma2Err) #ajout des observations effectives
-      
-    }
-    
-    
-    #récupération des observations
-    hidden <- as.data.frame(hid_val = hidden_list) 
-    
-    df <- as.data.frame(value = mes_list)
-    
-    out <- list(df = df, hidden = hidden)
-    
-     return(out)
-    
-  }
-}  
-
-```
-
-```{r création des données en dimension unique}
-
-#paramètres
-size <- 1000
-mean <- 0
-sigma2 <- 3
-sigma2Trans <- 4
-sigma2Err <- 1
-a <- 3
-b <- 1
-alpha <- 1.2
-beta <- 1
-
-#Crea_Data => (size, mean, sigma2, sigma2Trans, sigma2Err, a, b, alpha, beta, dimState = 1, dimMes = 1)
-Data1 <- Crea_Data(size, mean, sigma2, sigma2Trans, sigma2Err, a, b, alpha, beta) # voici les données; ici les yi
-
-```
-
-Les données explosent. Je ne sais pas si c'est dû à mon code ou aux paramètres
-
-Je n'ai pas eu le temps de faire le reste
-```{r représentation des données pour une seule dimension}
-
-#fonction gaussienne de la somme des termes erreur + obs cachées
-Y_densite <- function(x, mean, sd, sdErr, a = 1, b = 0){
-  return(dnorm(x, mean = a * mean + b , sd = sqrt(a * a * sd + sdErr)) * 2 * size)
+  y = eigen(A)
+  MCV <- matrix(y$vectors,byrow=F,ncol=dim(A)[1]) #matrice orthogonale de vecteurs propres
+  MCVinv <- t(MCV) #transposée de matrice de vecteur propre
+  Diag <- diag(y$values, nrow = dim(A)[1]) #matrice diagonale des valeurs propres
+  DiagCalc <- sqrt(Diag) # matrice diagonale racine carrée des valeurs propres
+  MCV %*% DiagCalc
 }
 
 
-#représentation graphique pour une variance faible de l'erreur
-ggplot(aes(x = dim1),data = Data1$df) +
-  geom_histogram(show.legend = FALSE, binwidth = 2, fill = "lightblue3", col = 'black') +
+#Fonction génération d'une donnée de n dimensions
+get_simulation <- function(n_sim, pars){
+  x_white_noise <- matrix(rnorm(n_sim * pars$dim_x),
+                          nrow = pars$dim_x,
+                          ncol = n_sim)
+  x <- pars$matF %*% pars$m_x + get_mat_sqrt(pars$S_x) %*% x_white_noise
+  y_white_noise <- matrix(rnorm(n_sim * pars$dim_y),
+                          nrow = pars$dim_y,
+                          ncol = n_sim)
+  y <- pars$A %*% x + pars$b +  get_mat_sqrt(pars$S_y) %*% y_white_noise
+  return(list(x = t(x), y = t(y)))
+}
+
+
+#Fonction de création des N données
+get_data <- function(n_sim, pars_X0, pars){
+  
+  Data <- get_simulation(1, pars_X0) #Création de la première donnée
+  X_loop <- Data$x #Récupération de la donnée pour l'utiliser en argument de la suivante
+  pars$m_x <- t(X_loop) #Ajout dans les paramètre de la donnée récupérée
+
+  
+  for (i in 1:(n_sim-1)){ #Boucle de la création des données suivantes
+    
+    append <- get_simulation(1, pars) #Création de la donnée en fonction de la précédente
+    X_loop <- append$x #Récupération de la donnée pour l'utiliser en argument de la suivante
+    pars$m_x <- as.matrix(t(X_loop)) #Ajout dans les paramètre de la donnée récupérée
+    Data <- bind_rows(Data,append) #Enregistrement des valeurs de X et Y dans le Data
+  }
+  return(Data)
+}
+
+
+```
+
+Ceci fait, nous utilisons les paramètres suivants pour créer les données.
+
+```{r création de toutes les données}
+
+
+pars_X0_1d <- list(dim_x = 1,
+             dim_y = 1,
+             m_x = 4,
+             S_x = 2,
+             A = 2,
+             b = 0,
+             matF = 0.3,
+             S_y = 0.1)
+pars_1d <- list(dim_x = 1, #pas de valeur moyenne 
+             dim_y = 1,
+             S_x = 2,
+             A = 2,
+             b = 0,
+             matF = 0.5,
+             S_y = 0.1)
+
+
+pars_X0_2d <- list(dim_x = 2,
+                dim_y = 2,
+                m_x = rep(1, 2),
+                S_x = diag(1.1, 2),
+                A = matrix(0:3, nrow = 2, ncol = 2),
+                b = rep(0, 2),
+                matF = diag(0.5,2), 
+                S_y = diag(0.2, 2))
+pars_2d <- list(dim_x = 2, #pas de valeur moyenne 
+                dim_y = 2,
+                S_x = diag(1.2, 2),
+                A = matrix(0:3, nrow = 2, ncol = 2),
+                b = rep(0, 2),
+                matF = diag(0.4,2), 
+                S_y = diag(0.2, 2))
+
+
+pars_X0_3d <- list(dim_x = 3,
+                dim_y = 2,
+                m_x = rep(1, 3),
+                S_x = diag(1, 3),
+                A = matrix(1:6, nrow = 2, ncol = 3),
+                b = rep(0, 2),
+                matF = diag(0.5,3), 
+                S_y = diag(0.2,2))
+pars_3d <- list(dim_x = 3, #pas de valeur moyenne 
+                dim_y = 2,
+                S_x = diag(1, 3),
+                A = matrix(1:6, nrow = 2, ncol = 3),
+                b = rep(0, 2),
+                matF = diag(0.2,3), 
+                S_y = diag(0.2,2))
+
+
+n_obs <- 20
+data_1d <- get_data(n_obs, pars_X0_1d, pars_1d) #Données 1d
+data_2d <- get_data(n_obs, pars_X0_2d, pars_2d) #Données 2d
+data_3d <- get_data(n_obs, pars_X0_3d, pars_3d) #Données 3d
+
+```
+
+## Représentation des données
+
+Nous représentons les données en première dimension avec un histogramme.
+
+```{r représentation des données pour une seule dimension}
+#| echo: false
+
+
+#fonction gaussienne de la répartition des tirages Y
+Y_densite <- function(x, pars, pars_X0){
+  #return(mixtools::dmvnorm(n = n_obs, mu = pars$A %*% pars$data_1d$x %*% t(pars$A) + pars$b))
+                         #sigma = as.matrix(pars$S_x)))
+  return(dnorm(x, mean = pars$A * pars_X0$m_x + pars$b , sd = sqrt(pars$A^2 * pars$S_x + pars$S_y)))
+}
+
+
+#représentation graphique de l'échantillon créé
+ggplot(aes(x = data_1d$y), data = as.data.frame(data_1d$y)) +
+  geom_histogram(aes(y = after_stat(density)), binwidth = 2, fill = "lightblue3", col = 'black') +
   ggtitle("Histogramme de la répartition des observations effectivement observées") +
-  stat_function(fun = Y_densite , args = list(mean = mu, sd = sqrt(sigma2), sdErr = sqrt(sigma2Err), a = a, b = b), aes(color = "Densité du tirage de Y"), linewidth = 1) +
-  scale_color_manual(name = "Légende", values = c("Densité du tirage de Y" = "red"))+
-  labs(x = "Valeur des observations Y", y = "Comptage des observations Y")
+  
+  #densité réelle
+  geom_density(aes(color = "Densité réelle du tirage de Y"), linewidth = 1) +
+  
+  #densité théorique
+  stat_function(fun = Y_densite, args = list(pars = pars_1d, pars_X0_1d), aes(color = "Densité théorique du tirage de Y"), 
+                linewidth = 1) +
+  
+  #création de la légende
+  scale_color_manual(name = "Légende", values = c("Densité théorique du tirage de Y" = "red", 
+                                                  "Densité réelle du tirage de Y" = "blue")) +
+  
+  labs(x = "Valeur des observations Y", y = "Densité du comptage des observations Y")
 
 
 ```
 
-```{r création des données en dimension multiple}
-
-#paramètres
-dim <- 2
-muDim <- c(0,0)
-sigma2Dim <- c(9,9)
-sigma2ErrDim <- c(1,1)
-
-Data2 <- Crea_Data(size, muDim, sqrt(sigma2Dim), sqrt(sigma2ErrDim), a, b, dim = 2)
-
-```
+Puis en deuxième dimension avec un histogramme 3D et une heatmap.
 
 ```{r représentation des données pour des dimensions mulitples}
+#| echo: false
 
-#séparation des données en intervalles
-x_c <- cut(Data2$df$dim1, 20)
-y_c <- cut(Data2$df$dim2, 20)
+#Séparation des données en intervalles
+x_c <- cut(data_2d$y[,1], 20)
+y_c <- cut(data_2d$y[,2], 20)
 
-#jointure des données
+#Jonction des données
 z <- table(x_c, y_c)
 
-#représentation de l'histogramme 3D
+#Représentation de l'histogramme 3D
 hist3D(z=z, border="black", main = "Histogramme 3D de la répartition des données effectivement observées", xlab = "Valeur dim 1 de Y", ylab = "Valeur dim 2 de Y", zlab = "Comptage")
 
-#représentation en hitmap
+#Représentation de la heatmap
 image2D(z=z, border="black",main = "Heatmap de la répartition des données effectivement observées", xlab = "Valeur dim 1 de Y", ylab = "Valeur dim 2 de Y")
 
 ```
 
-```{}
+Enfin, nous repésentons le déplacement des X et Y par un graphe des points en deux dimensions.
+
+```{r représentation des points en dimension 2}
+#| echo: false
+
+df_x <- tibble(x = data_2d$x[,1], y = data_2d$x[,2])
+df_y <- tibble(x = data_2d$y[,1], y = data_2d$y[,2])
+
+df_arrows_x <- tibble(
+  x_start = df_x$x[-nrow(df_x)],
+  y_start = df_x$y[-nrow(df_x)],
+  x_end   = df_x$x[-1],
+  y_end   = df_x$y[-1]
+)
+
+df_arrows_y <- tibble(
+  x_start = df_y$x[-nrow(df_y)],
+  y_start = df_y$y[-nrow(df_y)],
+  x_end   = df_y$x[-1],
+  y_end   = df_y$y[-1]
+)
+
+df_points <- bind_rows(
+  mutate(df_x, Legende = "Points de X"),
+  mutate(df_y, Legende = "Points de Y")
+)
+
+ggplot() +
+  geom_segment(data = df_arrows_y,
+               aes(x = x_start, y = y_start, xend = x_end, yend = y_end),
+               arrow = arrow(type = "closed", length = unit(0.10, "inches")),
+               color = "lightblue4", show.legend = FALSE) +
+    geom_segment(data = df_arrows_x,
+               aes(x = x_start, y = y_start, xend = x_end, yend = y_end),
+               arrow = arrow(type = "closed", length = unit(0.10, "inches")),
+               color = "pink3", show.legend = FALSE) +
+  geom_point(data = df_points,
+             aes(x = x, y = y, color = Legende),
+             size = 3) +
+  scale_color_manual(values = c("Points de X" = "red", "Points de Y" = "blue")) +
+  labs(x = "Coordonnée abscisse", y = "Coordonnée ordonnée", title = "Trajectoire des points Y₁ → Y₂ → ... → Y₂₀ et X₁ → X₂ → ... → X₂₀") 
+
 ```
 
-```{r tests et stockage de codes}
+Il est possible de représenter les données en deux dimensions sur ce graphe mais leur distribution gaussienne rend toujours un résultat brouillon qui empêche une bonne lecture.
 
-A <- matrix(c(1,2,3,4),byrow=T,ncol=2)
-DD <- dim(A)[2]
+## Création de l'algorithme du filtre de Kalman
 
-a <- c(1,2)
-b <- c(1,2)
-c <- A%*%a + b
+Nous implémentons l'algorithme du filtre de Kalman avec la fonction *get_filtering_kalman*.
 
-y = eigen(A)
-y$values #affiche les valeurs propres
-y$vectors #affiche les vecteurs propres
+```{r création de l algorithme du filtre de Kalman}
 
-
-matCarre <- function(A){
-  y = eigen(A)
-  MCV <- matrix(y$vectors,byrow=F,ncol=dim(A)[1])
-  MCVinv <- t(MCV)
-  Diag <- diag(y$values)
-  DiagCalc <- diag(sqrt(y$values))
-  sqrt <- MCV %*% DiagCalc
+get_filtering_kalman <- function(pars_X0, pars, data){
   
-  out <- list(sqrt = sqrt, diag = Diag, base = MCV)
+  #initialisation du tableau de sortie
+  n <- nrow(data)
+  out <- data.frame(mu_hat = I(vector("list", n)), V_hat = I(vector("list", n)), P = I(vector("list", n)))
+  
+  #initialisation de l'algorithme pour le premier terme
+  K <- pars_X0$S_x %*% t(pars$A) %*% solve(pars$A %*% pars_X0$S_x %*% t(pars$A) + pars$S_y)
+  mu <- pars_X0$m_x + K %*% (data$x[1] - pars$A %*% pars_X0$m_x)
+  V <- (diag(pars$dim_x) - K %*% pars$A) %*% pars_X0$S_x
+  P <- pars$matF %*% V %*% t(pars$matF) + pars$S_x
+  
+  out$mu_hat[[1]] <- as.matrix(t(mu))
+  out$V_hat[[1]] <- as.matrix(V)
+  out$P[[1]] <- as.matrix(P)
+ 
+  #boucle de l'algorithme
+  for (i in 2:n){
+    K <- P %*% t(pars$A) %*% solve(pars$A %*% P %*% t(pars$A) + pars$S_y)
+    mu <- pars$matF %*% mu + K %*% (data$x[i] - pars$A %*% pars$matF %*% mu)
+    V <- (diag(pars$dim_x) - K %*% pars$A) %*% P
+    P <- pars$matF %*% V %*% t(pars$matF) + pars$S_x
+    
+    out$mu_hat[[i]] <- as.matrix(t(mu))
+    out$V_hat[[i]] <- as.matrix(V)
+    out$P[[i]] <- as.matrix(P)
+    
+  }
   return(out)
 }
 
-multiNorm <- function(size, mean, sd){
-  vect <- rnorm(size)
-  carre <- matCarre(sd)
-  return(mean + carre$sqrt %*% vect)
+```
+
+Nous pouvons récupérer les estimations de l'algorithme.
+
+```{r utilisation de l algorithme de filtre}
+
+filter_1d <- get_filtering_kalman(pars_X0_1d, pars_1d, data_1d)
+filter_2d <- get_filtering_kalman(pars_X0_2d, pars_2d, data_2d)
+filter_3d <- get_filtering_kalman(pars_X0_3d, pars_3d, data_3d)
+
+```
+
+Puis nous représentons les estimations pour chaque points X avec un intervalle de confiance à 95%.
+
+```{r représentation de l estimation du filtre de Kalman en dim1}
+#| echo: false
+
+
+n <- nrow(data_1d)
+
+filter_1d$mu_1d <- sapply(filter_1d$mu_hat, function(x) x[1]) #récupération des valeurs sous forme de réels
+filter_1d$V_1d <- sapply(filter_1d$V_hat, function(x) x[1]) 
+
+filter_1d$index <- 1:n #création d'un index
+filter_1d$lower <- filter_1d$mu_1d - 1.96*sqrt(filter_1d$V_1d)/sqrt(filter_1d$index) #création des valeurs de l'IC
+filter_1d$upper <- filter_1d$mu_1d + 1.96*sqrt(filter_1d$V_1d)/sqrt(filter_1d$index)
+
+#création d'un dataframe auxiliaire pour récupérer les états
+df_long <- rbind(
+  data.frame(index = 1:n, value = data_1d$x, type = "x (état réel)"),
+  data.frame(index = 1:n, value = data_1d$y, type = "y (observation)"),
+  data.frame(index = filter_1d$index, value = filter_1d$mu_1d, type = "mu_hat (estimation)")
+)
+
+df_long$type <- factor(df_long$type, levels = c("x (état réel)", "y (observation)", "mu_hat (estimation)"))
+
+ggplot() +
+  #Création de l'IC autour de mu_hat (filtrage)
+  geom_ribbon(data = filter_1d, aes(x = index, ymin = lower, ymax = upper, fill = "Intervalle de confiance"), alpha = 0.2) +
+
+  #Ligne de mu_hat
+  geom_line(data = filter_1d, aes(x = index, y = mu_1d), color = "red", linewidth = 1, show.legend = FALSE) +
+
+  #Points et ligne pour la légende
+  geom_point(data = df_long, aes(x = index, y = value, color = type, shape = type), size = 2) +
+
+  #Création d'un point invisible pour faire apparaître les légendes
+  geom_point(data = filter_1d, aes(x = index, y = mu_1d, color = "mu_hat (estimation)", shape = "mu_hat (estimation)"), 
+             size = 1, alpha = 0) +
+
+  # Légendes
+  scale_color_manual(name = "Légende",
+                     values = c("x (état réel)" = "black",
+                                "y (observation)" = "blue",
+                                "mu_hat (estimation)" = "red",
+                                "Intervalle de confiance" = "cyan4")) +
+  scale_shape_manual(name = "Légende",
+                     values = c("x (état réel)" = 16,
+                                "y (observation)" = 4, 
+                                "mu_hat (estimation)" = 1)) +
+  scale_fill_manual(name = "Légende",
+                    values = c("Intervalle de confiance" = "cyan4")) +
+
+  labs(x = "Numéro de l'observation", y = "Valeur",
+       title = "Estimation de x par le Kalman filter avec intervalle de confiance à 95%") 
+
+ 
+```
+
+L'estimation semble bien suivre les valeur de la variable estimée. On observe aussi que l'intervalle de confiance n'apparait quasiment pas; c'est sûrement dû a la variance très faible rendue par l'algorithme ce qui implique que l'intervalle prend des valeurs non significatives par rapport à celle des points obtenus.
+
+```{r représentation de l estimation du filtre de Kalman en dim2}
+#| echo: false
+
+
+n2 <- nrow(data_2d)
+
+filter_2d$mu_2dx <- sapply(filter_2d$mu_hat, function(x) x[2]) #récupération des valeurs sous forme de réels
+filter_2d$mu_2dy <- sapply(filter_2d$mu_hat, function(x) x[1])
+filter_2d$V_2dx <- sapply(filter_2d$V_hat, function(x) x[1]) 
+filter_2d$V_2dy <- sapply(filter_2d$V_hat, function(x) x[4]) 
+
+filter_2d$index <- 1:n2 #création d'un index
+filter_2d$lower_x <- filter_2d$mu_2dx - 1.96*sqrt(filter_2d$V_2dx)/sqrt(filter_2d$index) #création des valeurs de l'IC pour la première variable
+filter_2d$upper_x <- filter_2d$mu_2dx + 1.96*sqrt(filter_2d$V_2dx)/sqrt(filter_2d$index)
+
+filter_2d$lower_y <- filter_2d$mu_2dy - 1.96*sqrt(filter_2d$V_2dy)/sqrt(filter_2d$index) #création des valeurs de l'IC pour la deuxième variable
+filter_2d$upper_y <- filter_2d$mu_2dy + 1.96*sqrt(filter_2d$V_2dy)/sqrt(filter_2d$index)
+
+
+#création d'un dataframe auxiliaire pour récupérer les états
+df_long_2d <- rbind(
+  data.frame(index = 1:n2, value = data_2d$x[,1], type = "x (état réel 1)"),
+  data.frame(index = 1:n2, value = data_2d$x[,2], type = "x (état réel 2)"),
+  data.frame(index = 1:n2, value = data_2d$y[,1], type = "y (observation 1)"),
+  data.frame(index = 1:n2, value = data_2d$y[,2], type = "y (observation 2)"),
+  data.frame(index = filter_2d$index, value = filter_2d$mu_2dx, type = "mu_hat (estimation 1)"),
+  data.frame(index = filter_2d$index, value = filter_2d$mu_2dy, type = "mu_hat (estimation 2)")
+)
+
+df_long_2d$type <- factor(df_long_2d$type, levels = c("x (état réel 1)", "x (état réel 2)", "y (observation 1)", "y (observation 2)", "mu_hat (estimation 1)", "mu_hat (estimation 2)"))
+
+
+
+ggplot() +
+  #Création de l'IC autour de mu_hat (filtrage)
+  geom_ribbon(data = filter_2d, aes(x = index, ymin = lower_x, ymax = upper_x, fill = "Intervalle de confiance"), alpha = 0.2) +
+
+  #Ligne de mu_hat
+  geom_line(data = filter_2d, aes(x = index, y = mu_2dx), color = "red", linewidth = 1, show.legend = FALSE) +
+
+  #Points et ligne pour la légende
+  geom_point(data = df_long_2d, aes(x = index, y = value, color = type, shape = type), size = 2, na.rm = TRUE) +
+
+  #Création d'un point invisible pour faire apparaître les légendes
+  geom_point(data = filter_2d, aes(x = index, y = mu_2dx, color = "mu_hat (estimation 1)", shape = "mu_hat (estimation 1)"), 
+             size = 1, alpha = 0) +
+
+  # Légendes
+  scale_color_manual(name = "Légende",
+                     values = c("x (état réel 1)" = "black",
+                                "y (observation 1)" = "blue",
+                                "mu_hat (estimation 1)" = "red",
+                                "Intervalle de confiance" = "cyan4")) +
+  scale_shape_manual(name = "Légende",
+                     values = c("x (état réel 1)" = 16,
+                                "y (observation 1)" = 4, 
+                                "mu_hat (estimation 1)" = 1)) +
+  scale_fill_manual(name = "Légende",
+                    values = c("Intervalle de confiance" = "cyan4")) +
+
+  labs(x = "Numéro de l'observation", y = "Valeur",
+       title = "Estimation de la dimension 1 de x par le Kalman filter avec intervalle de confiance à 95%") 
+
+
+
+ggplot() +
+  #Création de l'IC autour de mu_hat (filtrage)
+  geom_ribbon(data = filter_2d, aes(x = index, ymin = lower_y, ymax = upper_y, fill = "Intervalle de confiance"), alpha = 0.2) +
+
+  #Ligne de mu_hat
+  geom_line(data = filter_2d, aes(x = index, y = mu_2dy), color = "red", linewidth = 1, show.legend = FALSE) +
+
+  #Points et ligne pour la légende
+  geom_point(data = df_long_2d, aes(x = index, y = value, color = type, shape = type), size = 2, na.rm = TRUE) +
+
+  #Création d'un point invisible pour faire apparaître les légendes
+  geom_point(data = filter_2d, aes(x = index, y = mu_2dy, color = "mu_hat (estimation 2)", shape = "mu_hat (estimation 2)"), 
+             size = 1, alpha = 0) +
+
+  # Légendes
+  scale_color_manual(name = "Légende",
+                     values = c("x (état réel 2)" = "black",
+                                "y (observation 2)" = "blue",
+                                "mu_hat (estimation 2)" = "red",
+                                "Intervalle de confiance" = "cyan4")) +
+  scale_shape_manual(name = "Légende",
+                     values = c("x (état réel 2)" = 16,
+                                "y (observation 2)" = 4, 
+                                "mu_hat (estimation 2)" = 1)) +
+  scale_fill_manual(name = "Légende",
+                    values = c("Intervalle de confiance" = "cyan4")) +
+
+  labs(x = "Numéro de l'observation", y = "Valeur",
+       title = "Estimation de la dimension 2 de x par le Kalman filter avec intervalle de confiance à 95%") 
+ 
+
+```
+
+Pour la première dimension, l'estimation semble bien suivre les valeurs de $X$ et l'intervalle de confiance récupère bien certains points de la variable aléatoire.
+
+Pour la deuxième dimension, l'estimation semble moins bien représenter les valeurs de $X$ en particulier ses variations. L'intervalle de confiance disparait rapidement après plusieurs valeurs ce qui est dû encore une fois aux faibles valeurs des variances couplé au fait que cet intevalle de confiance varie selon le nombre de mesures.
+
+## Création de l'algorithme du lisseur RTS
+
+Nous implémentons maintenant l'algorithme du lisseur RTS pour nos données.
+
+```{r création de l algorithme du lisseur RTS}
+
+get_smoothering_RTS <- function(ini,pars){
+  
+  #initialisation du tableau de sortie
+  n <- nrow(ini)
+  out <- data.frame(mu_hat = I(vector("list", n)), V_hat = I(vector("list", n)))
+  
+  out$mu_hat[[n]] <- t(ini$mu_hat[[n]])
+  out$V_hat[[n]] <- t(ini$V_hat[[n]])
+  
+  #boucle de l'algorithme
+  for (i in (n-1):1){
+
+    C <- ini$V_hat[[i]] %*% t(pars$matF) %*% solve(ini$P[[i]])
+    mu_hat_loop <- t(ini$mu_hat[[i]]) + C %*% (out$mu_hat[[i+1]] - pars$matF %*% t(ini$mu_hat[[i]]))
+    V_hat_loop <- ini$V_hat[[i]] + C %*% (out$V_hat[[i+1]] - ini$P[[i]]) %*% t(C)
+    out$mu_hat[[i]] <- as.matrix(mu_hat_loop)
+    out$V_hat[[i]] <- as.matrix(V_hat_loop)
+
+  }
+  
+  return(out)
 }
 
-#mtest <- c(1,1)
-#covtest <- matrix(c(2,1,1,2),byrow=T,ncol=2)
-#carre <- matCarre(covtest)
-#vect <- rnorm(2)
-#carre$sqrt
-multiNorm(2,mtest,covtest)
+```
+
+Nous pouvons récuperer les estimations.
+
+```{r utilisation de l algorithme de lissage}
+
+smoother_1d <- get_smoothering_RTS(filter_1d, pars_1d)
+smoother_2d <- get_smoothering_RTS(filter_2d, pars_2d)
+smoother_3d <- get_smoothering_RTS(filter_3d, pars_3d)
+
+```
+
+Afin de mieux comprendre ces algorithmes nous les mettons en concurrence sur ce graphe.
+
+```{r représentation de l estimation du filtre et du lisseur de Kalman en dim1}
+#| echo: false
 
 
+smoother_1d$mu_1d <- sapply(smoother_1d$mu_hat, function(x) x[1]) #récupération des valeurs sous forme de réels
+smoother_1d$V_1d <- sapply(smoother_1d$V_hat, function(x) x[1])
+smoother_1d$index <- 1:n #création d'un index
+
+smoother_1d$lower <- smoother_1d$mu_1d - 1.96*sqrt(smoother_1d$V_1d)/sqrt(n) #création des valeurs de l'IC
+smoother_1d$upper <- smoother_1d$mu_1d + 1.96*sqrt(smoother_1d$V_1d)/sqrt(n)
+
+#Création de la donnée pour l'intervalle de confiance
+ribbon_data <- data.frame(
+  index = smoother_1d$index,
+  lower = smoother_1d$lower,
+  upper = smoother_1d$upper,
+  type = "Intervalle de confiance"
+)
+
+legend_for_shape <- data.frame(
+  index = rep(0, 4),       # 0 est en dehors de la plage (1:n)
+  value = rep(0, 4),       # 0 en y (ou une valeur hors plage)
+  type = factor(c("x (état réel)", "y (observation)", "mu_hat (filtrage)", "mu_hat (lissage)"),
+                levels = c("x (état réel)", "y (observation)", "mu_hat (filtrage)", "mu_hat (lissage)"))
+)
+
+#création d'un dataframe auxiliaire pour récupérer les états
+df_long2 <- rbind(
+  data.frame(index = 1:n, value = data_1d$x, type = "x (état réel)"),
+  data.frame(index = 1:n, value = data_1d$y, type = "y (observation)"),
+  data.frame(index = filter_1d$index, value = filter_1d$mu_1d, type = "mu_hat (filtrage)"),
+  data.frame(index = smoother_1d$index, value = smoother_1d$mu_1d, type = "mu_hat (lissage)")
+)
+
+df_long$type <- factor(df_long$type, levels = c("x (état réel)", "y (observation)", "mu_hat (filtrage)", "mu_hat (lissage)"))
 
 
+ggplot() +
+  # Ribbon avec fill
+  geom_ribbon(data = ribbon_data, aes(x = index, ymin = lower, ymax = upper, fill = type), alpha = 0.2) +
+
+  # Lignes avec color
+  geom_line(data = filter_1d, aes(x = index, y = mu_1d, color = "mu_hat (filtrage)"), linewidth = 1) +
+  geom_line(data = smoother_1d, aes(x = index, y = mu_1d, color = "mu_hat (lissage)"), linewidth = 1, alpha = 0.5) +
+
+  # Points visibles
+  geom_point(data = df_long2, aes(x = index, y = value, color = type, shape = type), size = 2) +
+
+  # Points invisibles pour forcer la légende des formes
+  geom_point(data = legend_for_shape, aes(x = index, y = value, color = type, shape = type), size = 2, alpha = 0) +
+
+  scale_color_manual(name = "Légende",
+                     values = c("x (état réel)" = "black",
+                                "y (observation)" = "blue",
+                                "mu_hat (filtrage)" = "red",
+                                "mu_hat (lissage)" = "darkgreen",
+                                "Intervalle de confiance" = "cyan4")) +
+
+  scale_fill_manual(name = "Légende",
+                    values = c("Intervalle de confiance" = "cyan4")) +
+
+  scale_shape_manual(name = "Légende",
+                     values = c("x (état réel)" = 16,
+                                "y (observation)" = 4,
+                                "mu_hat (filtrage)" = 1,
+                                "mu_hat (lissage)" = 1,
+                                "Intervalle de confiance" = NA))+
+
+  labs(x = "Numéro de l'observation", y = "Valeur",
+       title = "Estimation et lissage de x avec intervalle de confiance à 95%")
+
+```
+
+Comme le graphe précédent, l'estimateur semble bon et l'intervalle de confiance n'apparait pas pour les mêmes raisons.
+
+```{r calcul de la distance entre les deux estimations}
+
+estimation_variation <- abs(smoother_1d$mu_1d - filter_1d$mu_1d)
+print(mean(estimation_variation))
+
+```
+
+Nous voyons de plus qu'il n'apparait qu'une courbe; ceci est dû au fait que les deux estimateurs donnent les mêmes valeurs dans ce cas comme nous l'indique la distance moyenne entre les deux estimateurs de $\mu$ ci-dessus.
+
+```{r représentation de l estimation du filtre et du lisseur de Kalman en dim2}
+#| echo: false
+
+smoother_2d$mu_2dx <- sapply(smoother_2d$mu_hat, function(x) x[2]) #récupération des valeurs sous forme de réels
+smoother_2d$mu_2dy <- sapply(smoother_2d$mu_hat, function(x) x[1])
+smoother_2d$V_2dx <- sapply(smoother_2d$V_hat, function(x) x[1]) 
+smoother_2d$V_2dy <- sapply(smoother_2d$V_hat, function(x) x[4]) 
+smoother_2d$index <- 1:n2 #création d'un index
+
+smoother_2d$lower_x <- smoother_2d$mu_2dx - 1.96*sqrt(smoother_2d$V_2dx)/sqrt(n2) #création des valeurs de l'IC pour la première variable
+smoother_2d$upper_x <- smoother_2d$mu_2dx + 1.96*sqrt(smoother_2d$V_2dx)/sqrt(n2)
+
+smoother_2d$lower_y <- smoother_2d$mu_2dy - 1.96*sqrt(smoother_2d$V_2dy)/sqrt(n2) #création des valeurs de l'IC pour la deuxième variable
+smoother_2d$upper_y <- smoother_2d$mu_2dy + 1.96*sqrt(smoother_2d$V_2dy)/sqrt(n2)
 
 
+#Création de la donnée pour l'intervalle de confiance
+ribbon_data_2d <- data.frame(
+  index = smoother_2d$index,
+  lower_x = smoother_2d$lower_x,
+  upper_x = smoother_2d$upper_x,
+  lower_y = smoother_2d$lower_y,
+  upper_y = smoother_2d$upper_y,
+  type = "Intervalle de confiance"
+)
 
- #récupération des observations
-  col_names <- paste0("dim", seq(dim)) #creation de la colonne de nom
-  hidden <- as.data.frame(hidden_list) 
-  colnames(hidden) <- col_names #application de la colonne de nom sur hidden
+legend_for_shape_2d <- data.frame(
+  index = rep(0, 8),       # 0 est en dehors de la plage (1:n)
+  value = rep(0, 8),       # 0 en y (ou une valeur hors plage)
+  type = factor(c("x (état réel 1)", "y (observation 1)", "x (état réel 2)", "y (observation 2)", "mu_hat (filtrage 1)", "mu_hat (filtrage 2)", "mu_hat (lissage 1)", "mu_hat (lissage 2)"),
+                levels = c("x (état réel 1)", "y (observation 1)", "x (état réel 2)", "y (observation 2)", "mu_hat (filtrage 1)", "mu_hat (filtrage 2)", "mu_hat (lissage 1)", "mu_hat (lissage 2)"))
+)
+
+#création d'un dataframe auxiliaire pour récupérer les états
+df_long2_2d <- rbind(
+  data.frame(index = 1:n2, value = data_2d$x[,1], type = "x (état réel 1)"),
+  data.frame(index = 1:n2, value = data_2d$x[,2], type = "x (état réel 2)"),
+  data.frame(index = 1:n2, value = data_2d$y[,1], type = "y (observation 1)"),
+  data.frame(index = 1:n2, value = data_2d$y[,2], type = "y (observation 2)"),
+  data.frame(index = filter_2d$index, value = filter_2d$mu_2dx, type = "mu_hat (filtrage 1)"),
+  data.frame(index = filter_2d$index, value = filter_2d$mu_2dy, type = "mu_hat (filtrage 2)"),
+  data.frame(index = smoother_2d$index, value = smoother_2d$mu_2dx, type = "mu_hat (lissage 1)"),
+  data.frame(index = smoother_2d$index, value = smoother_2d$mu_2dy, type = "mu_hat (lissage 2)")
   
+)
+
+df_long2_2d$type <- factor(df_long2_2d$type, levels = c("x (état réel 1)", "y (observation 1)", "x (état réel 2)", "y (observation 2)", "mu_hat (filtrage 1)", "mu_hat (filtrage 2)", "mu_hat (lissage 1)", "mu_hat (lissage 2)"))
+
+
+ggplot() +
+  # Ribbon avec fill
+  geom_ribbon(data = ribbon_data_2d, aes(x = index, ymin = lower_x, ymax = upper_x, fill = type), alpha = 0.2) +
   
-  err <- as.data.frame(err_list)
-  colnames(err) <- col_names #application de la colonne de nom sur err
+  # Lignes avec color
+  geom_line(data = filter_2d, aes(x = index, y = mu_2dx, color = "mu_hat (filtrage 1)"), linewidth = 1) +
+  geom_line(data = smoother_2d, aes(x = index, y = mu_2dx, color = "mu_hat (lissage 1)"), linewidth = 1, alpha = 0.5) +
   
+  # Points visibles
+  geom_point(data = df_long2_2d, aes(x = index, y = value, color = type, shape = type), size = 2, na.rm = TRUE) +
   
-  df <- hidden + err
-  df <- as.data.frame(df)
-  colnames(df) <- col_names #application de la colonne de nom sur df
+  # Points invisibles pour forcer la légende des formes
+  geom_point(data = legend_for_shape_2d, aes(x = index, y = value, color = type, shape = type), size = 2, alpha = 0, na.rm = TRUE) +
   
-  out <- list(df = df, hidden = hidden, err = err)
+  scale_color_manual(name = "Légende",
+                     values = c("x (état réel 1)" = "black",
+                                "y (observation 1)" = "blue",
+                                "mu_hat (filtrage 1)" = "red",
+                                "mu_hat (lissage 1)" = "darkgreen",
+                                "Intervalle de confiance" = "cyan4")) +
+  
+  scale_fill_manual(name = "Légende",
+                    values = c("Intervalle de confiance" = "cyan4")) +
+  
+  scale_shape_manual(name = "Légende",
+                     values = c("x (état réel 1)" = 16,
+                                "y (observation 1)" = 4,
+                                "mu_hat (filtrage 1)" = 1,
+                                "mu_hat (lissage 1)" = 1,
+                                "Intervalle de confiance" = NA))+
+  
+  labs(x = "Numéro de l'observation", y = "Valeur",
+       title = "Estimation et lissage de la dim 1 de x avec intervalle de confiance à 95%")
+
+
+
+
+
+ggplot() +
+  # Ribbon avec fill
+  geom_ribbon(data = ribbon_data_2d, aes(x = index, ymin = lower_y, ymax = upper_y, fill = type), alpha = 0.2) +
+  
+  # Lignes avec color
+  geom_line(data = filter_2d, aes(x = index, y = mu_2dy, color = "mu_hat (filtrage 2)"), linewidth = 1) +
+  geom_line(data = smoother_2d, aes(x = index, y = mu_2dy, color = "mu_hat (lissage 2)"), linewidth = 1) +
+  
+  # Points visibles
+  geom_point(data = df_long2_2d, aes(x = index, y = value, color = type, shape = type), size = 2, na.rm = TRUE) +
+  
+  # Points invisibles pour forcer la légende des formes
+  geom_point(data = legend_for_shape_2d, aes(x = index, y = value, color = type, shape = type), size = 2, alpha = 0, na.rm = TRUE) +
+  
+  scale_color_manual(name = "Légende",
+                     values = c("x (état réel 2)" = "black",
+                                "y (observation 2)" = "blue",
+                                "mu_hat (filtrage 2)" = "red",
+                                "mu_hat (lissage 2)" = "darkgreen",
+                                "Intervalle de confiance" = "cyan4")) +
+  
+  scale_fill_manual(name = "Légende",
+                    values = c("Intervalle de confiance" = "cyan4")) +
+  
+  scale_shape_manual(name = "Légende",
+                     values = c("x (état réel 2)" = 16,
+                                "y (observation 2)" = 4,
+                                "mu_hat (filtrage 2)" = 1,
+                                "mu_hat (lissage 2)" = 1,
+                                "Intervalle de confiance" = NA))+
+  
+  labs(x = "Numéro de l'observation", y = "Valeur",
+       title = "Estimation et lissage de la dim 2 de x avec intervalle de confiance à 95%")
+```
+
+Pour la première variable, nous voyons que les deux estimations sont confondues dans la majorité des points, cependant, il existe malgré tout des endroit où une différence existe entre les valeurs contrairement au cas en dimension 1. De plus nous pouvons observer que l'intervalle de confiance est très petit autour de l'estimation et est constant. Cela est dû au fait que la variance de l'estimation est quasi-constante pour tout les points $\hat{\mu}$ et que le nombre de points observé est constant vu que la méthode du smoothing utilise la totalité des points des observations.
+
+Sur la seconde variable, il y a de vraies différences entre les deux estimations mais cette fois-ci l'intervalle de confiance n'apparait pas. C'est sûrement encore dû aux valeurs prises par la variance de l'estimation.
+
+## Filtrage de Doucet
+
+```{r}
+
+```
+
+```{r tests et stockage de code}
+#| echo: false
+
+get_simulation_alt <- function(n_sim, pars){
+  x <- mixtools::rmvnorm(n = n_sim, mu = pars$m_x,
+                         sigma = as.matrix(pars$S_x))
+  y <- t(pars$A %*% t(x) +  pars$b) +
+    mixtools::rmvnorm(n = n_sim, mu = rep(0, pars$dim_y),
+                      sigma = as.matrix(pars$S_y))
+  return(list(x = x, y = y))
+}
+
 ```
