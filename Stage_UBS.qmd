@@ -802,92 +802,146 @@ get_mahalanobis <- function(x, y, mu, sigma) {
 
 q <- qchisq(.95, pars_2d$dim_x)
 
-point_16 <- df_filter_2d[16, ]
-point_500 <- df_filter_2d[500, ]
+point_filter_16 <- df_filter_2d[16, ]
+point_filter_500 <- df_filter_2d[500, ]
 
-mu_1 <- as.numeric(filter_2d$mu_hat[16, ])  
-sigma_1 <- filter_2d$V_hat[,,16]
+df_smoother_2d <- data.frame(
+  index = 1:n2,
+  mu_hat_x = smoother_2d$mu_hat[,1],
+  mu_hat_y = smoother_2d$mu_hat[,2],
+  lower_x = smoother_2d$mu_hat[,1] - 1.96*sqrt(smoother_2d$V_hat[1,1,]), #création des valeurs de l'IC pour la première variable
+  upper_x = smoother_2d$mu_hat[,1] - 1.96*sqrt(smoother_2d$V_hat[1,1,]),
+  lower_y = smoother_2d$mu_hat[,2] - 1.96*sqrt(smoother_2d$V_hat[2,2,]), #création des valeurs de l'IC pour la deuxième variable
+  upper_y = smoother_2d$mu_hat[,2] + 1.96*sqrt(smoother_2d$V_hat[2,2,])
+)
 
-mu_2 <- as.numeric(filter_2d$mu_hat[500, ])  
-sigma_2 <- filter_2d$V_hat[,,500]
+point_smoother_16 <- df_smoother_2d[16, ]
+point_smoother_500 <- df_smoother_2d[500, ]
 
-x_seq1 <- seq(df_filter_2d$mu_hat_x[16] - 10, df_filter_2d$mu_hat_x[16] + 10, by = .1)
-y_seq1 <- seq(df_filter_2d$mu_hat_y[16] - 10, df_filter_2d$mu_hat_y[16] + 10, by = .1)
+mu_filter_16 <- as.numeric(filter_2d$mu_hat[16, ])  
+sigma_filter_16 <- filter_2d$V_hat[,,16]
 
-x_seq2 <- seq(df_filter_2d$mu_hat_x[500] - 10, df_filter_2d$mu_hat_x[500] + 10, by = .1)
-y_seq2 <- seq(df_filter_2d$mu_hat_y[500] - 10, df_filter_2d$mu_hat_y[500] + 10, by = .1)
+mu_filter_500 <- as.numeric(filter_2d$mu_hat[500, ])  
+sigma_filter_500 <- filter_2d$V_hat[,,500]
 
+mu_smoother_16 <- as.numeric(smoother_2d$mu_hat[16, ])  
+sigma_smoother_16 <- smoother_2d$V_hat[,,16]
 
-grille_points1 <- expand.grid(x = x_seq1, y = y_seq1)
-grille_points2 <- expand.grid(x = x_seq2, y = y_seq2)
+mu_smoother_500 <- as.numeric(smoother_2d$mu_hat[500, ])  
+sigma_smoother_500 <- smoother_2d$V_hat[,,500]
 
-dist_maha1 <- mapply(get_mahalanobis, 
+x_seq_16 <- seq(df_filter_2d$mu_hat_x[16] - 10, df_filter_2d$mu_hat_x[16] + 10, by = .1)
+y_seq_16 <- seq(df_filter_2d$mu_hat_y[16] - 10, df_filter_2d$mu_hat_y[16] + 10, by = .1)
+
+x_seq_500 <- seq(df_filter_2d$mu_hat_x[500] - 10, df_filter_2d$mu_hat_x[500] + 10, by = .1)
+y_seq_500 <- seq(df_filter_2d$mu_hat_y[500] - 10, df_filter_2d$mu_hat_y[500] + 10, by = .1)
+
+grille_points1 <- expand.grid(x = x_seq_16, y = y_seq_16)
+grille_points2 <- expand.grid(x = x_seq_500, y = y_seq_500)
+
+dist_maha_filter_16 <- mapply(get_mahalanobis, 
                      x = grille_points1$x, 
-                     y = grille_points1$y, 
-                     MoreArgs = list(mu = mu_1, sigma = sigma_1))
+                     y = grille_points1$y,
+                     MoreArgs = list(mu = mu_filter_16, sigma = sigma_filter_16))
 
-dist_maha2 <- mapply(get_mahalanobis, 
+dist_maha_filter_500 <- mapply(get_mahalanobis, 
                      x = grille_points2$x, 
                      y = grille_points2$y, 
-                     MoreArgs = list(mu = mu_2, sigma = sigma_2))
+                     MoreArgs = list(mu = mu_filter_500, sigma = sigma_filter_500))
 
-area_1 <- grille_points1[dist_maha1 <= q, ]
+dist_maha_smoother_16 <- mapply(get_mahalanobis, 
+                     x = grille_points1$x, 
+                     y = grille_points1$y,
+                     MoreArgs = list(mu = mu_smoother_16, sigma = sigma_smoother_16))
 
-area_2 <- grille_points2[dist_maha2 <= q, ]
+dist_maha_smoother_500 <- mapply(get_mahalanobis, 
+                     x = grille_points2$x, 
+                     y = grille_points2$y, 
+                     MoreArgs = list(mu = mu_smoother_500, sigma = sigma_smoother_500))
+
+area_filter_16 <- grille_points1[dist_maha_filter_16 <= q, ]
+
+area_filter_500 <- grille_points2[dist_maha_filter_500 <= q, ]
+
+area_smoother_16 <- grille_points1[dist_maha_smoother_16 <= q, ]
+
+area_smoother_500 <- grille_points2[dist_maha_smoother_500 <= q, ]
+
 
 ggplot()+
   geom_point(data = df_filter_2d,
              aes(x = mu_hat_x, y = mu_hat_y),
              size = 0.4)+
-geom_point(data = point_16,
+geom_point(data = point_filter_16,
              aes(x = mu_hat_x, y = mu_hat_y),
              size = 2, col = 'red') +
-  geom_point(data = point_500,
+  geom_point(data = point_filter_500,
              aes(x = mu_hat_x, y = mu_hat_y),
              size = 2, col = 'blue') +
-  geom_tile(data = area_1, aes(x = x, y = y), fill = "red", alpha = .4)+
-  geom_tile(data = area_2, aes(x = x, y = y), fill = "blue", alpha = .4)+
+  geom_tile(data = area_filter_16, aes(x = x, y = y), fill = "red", alpha = .4)+
+  geom_tile(data = area_filter_500, aes(x = x, y = y), fill = "blue", alpha = .4)+
   geom_tile(data = grille_points1, aes(x = x, y = y), fill = "lightblue", alpha = 0.5)+
   geom_tile(data = grille_points2, aes(x = x, y = y), fill = "lightblue", alpha = 0.5)
 
+
+
+ggplot()+
+  geom_point(data = df_smoother_2d,
+             aes(x = mu_hat_x, y = mu_hat_y),
+             size = 0.4)+
+geom_point(data = point_smoother_16,
+             aes(x = mu_hat_x, y = mu_hat_y),
+             size = 2, col = 'red') +
+  geom_point(data = point_smoother_500,
+             aes(x = mu_hat_x, y = mu_hat_y),
+             size = 2, col = 'blue') +
+  geom_tile(data = area_smoother_16, aes(x = x, y = y), fill = "red", alpha = .4)+
+  geom_tile(data = area_smoother_500, aes(x = x, y = y), fill = "blue", alpha = .4)+
+  geom_tile(data = grille_points1, aes(x = x, y = y), fill = "lightblue", alpha = 0.5)+
+  geom_tile(data = grille_points2, aes(x = x, y = y), fill = "lightblue", alpha = 0.5)
 ```
 
 ```{r}
-x_min <- point_16$mu_hat_x - 5  
-x_max <- point_16$mu_hat_x + 5  
-y_min <- point_16$mu_hat_y - 5  
-y_max <- point_16$mu_hat_y + 5  
+x_min <- point_filter_16$mu_hat_x - 5  
+x_max <- point_filter_16$mu_hat_x + 5  
+y_min <- point_filter_16$mu_hat_y - 5  
+y_max <- point_filter_16$mu_hat_y + 5  
 
 ggplot() +
   geom_point(data = df_filter_2d,
              aes(x = mu_hat_x, y = mu_hat_y),
              size = 0.4) +
-  geom_point(data = point_16,
+  geom_point(data = point_filter_16,
              aes(x = mu_hat_x, y = mu_hat_y),
              size = 2, col = 'red') +
-  geom_tile(data = area_1,
+  geom_tile(data = area_filter_16,
             aes(x = x, y = y),
-            fill = "red", alpha = 0.4) +
+            fill = "red", alpha = 0.3) +
+  geom_tile(data = area_smoother_16,
+            aes(x = x, y = y),
+            fill = "green3", alpha = 0.3) +
   coord_cartesian(xlim = c(x_min, x_max), ylim = c(y_min, y_max))
 ```
 
 ```{r}
-x_min <- point_500$mu_hat_x - 5  
-x_max <- point_500$mu_hat_x + 5  
-y_min <- point_500$mu_hat_y - 5  
-y_max <- point_500$mu_hat_y + 5  
+x_min <- point_filter_500$mu_hat_x - 5  
+x_max <- point_filter_500$mu_hat_x + 5  
+y_min <- point_filter_500$mu_hat_y - 5  
+y_max <- point_filter_500$mu_hat_y + 5  
 
 ggplot() +
   geom_point(data = df_filter_2d,
              aes(x = mu_hat_x, y = mu_hat_y),
              size = 0.4) +
-  geom_point(data = point_500,
+  geom_point(data = point_filter_500,
              aes(x = mu_hat_x, y = mu_hat_y),
              size = 2, col = 'blue') +
   geom_tile(data = area_2,
             aes(x = x, y = y),
             fill = "blue", alpha = 0.4) +
+    geom_tile(data = area_smoother_500,
+            aes(x = x, y = y),
+            fill = "grey3", alpha = 0.3) +
   coord_cartesian(xlim = c(x_min, x_max), ylim = c(y_min, y_max))
 
 ```
-
