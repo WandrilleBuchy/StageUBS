@@ -5,11 +5,13 @@ format: html
 editor: visual
 ---
 
-## Introduction
+# Filtre de Kalman et lissage RTS
 
-L'objectif est d'implémenter le filtre de Kalman. Pour cela, nous nous intéressons au *Hidden Markov Model* ou *HMM* représenté ci-bas avec les notations suivantes pour le modèle de dimension une :
+## Introduction du modèle
 
-![Figure 1 : Représentation de notre Hidden Markov Model](images/Schéma%20HHM.png){fig-align="center"}
+L'objectif est d'implémenter le filtre de Kalman et le lissage RTS qui en découle. Pour cela, nous nous intéressons au *Hidden Markov Model* ou *HMM* représenté ci-bas avec les notations suivantes pour le modèle de dimension une :
+
+![Modèle HMM](D:/Users/buchy/Documents/Stage/Schema_HHM.png){fig-align="center"}
 
 -   $X_{\text{i}}$ est la loi de l'état du système a l'instant i du modèle. Cet état est caché et un objectif sera d'obtenir sa loi conditionnelle sachant un ou plusieurs $Y_{\text{i}}$ qui sont les mesures prises des états. Nous nous intéresserons à la loi de transition de densité $p(x_{\text{i}} \mid x_{\text{i-1}})$ qui est représentée sur la figure par les flèches continues passant de $x_{\text{i-1}}$ à $x_{\text{i}}$. Nous supposons qu'elle est de la forme
 
@@ -86,6 +88,7 @@ library(dplyr)
 library(tibble)
 library(tidyr)
 library(tidyverse)
+library(RVCompare)
 
 ```
 
@@ -181,27 +184,9 @@ pars_2d <- list(dim_x = 2, #pas de valeur moyenne
                 S_y = diag(0.2, 2))
 
 
-pars_X0_3d <- list(dim_x = 3,
-                dim_y = 2,
-                m_x = rep(100, 3),
-                S_x = diag(1, 3),
-                A = matrix(1:6, nrow = 2, ncol = 3),
-                b = rep(0, 2),
-                matF = diag(0.5,3), 
-                S_y = diag(0.2,2))
-pars_3d <- list(dim_x = 3, #pas de valeur moyenne 
-                dim_y = 2,
-                S_x = diag(1, 3),
-                A = matrix(1:6, nrow = 2, ncol = 3),
-                b = rep(0, 2),
-                matF = diag(0.995,3), 
-                S_y = diag(0.2,2))
-
-
 n_obs <- 2000
 data_1d <- get_data(n_obs, pars_X0_1d, pars_1d) #Données 1d
 data_2d <- get_data(n_obs, pars_X0_2d, pars_2d) #Données 2d
-data_3d <- get_data(n_obs, pars_X0_3d, pars_3d) #Données 3d
 
 ```
 
@@ -209,7 +194,7 @@ data_3d <- get_data(n_obs, pars_X0_3d, pars_3d) #Données 3d
 
 Nous représentons les données en première dimension avec un histogramme.
 
-```{r représentation des données pour une seule dimension}
+```{r représentation des données pour une seule dimension en histogramme}
 #| echo: false
 
 data_histo <- rep(1,n_obs)
@@ -226,25 +211,25 @@ Y_densite <- function(x, pars){
 #représentation graphique de l'échantillon créé
 ggplot(data.frame(data_histo = data_histo), aes(x = data_histo)) +
   geom_histogram(aes(y = after_stat(density)), binwidth = 2, fill = "lightblue3", col = 'black') +
-  ggtitle("Histogramme de la répartition des observations effectivement observées") +
+  ggtitle("Histogramme des observations initiales effectivement observées") +
   
   #densité réelle
-  geom_density(aes(color = "Densité réelle du tirage de Y"), linewidth = 1) +
+  geom_density(aes(color = "Densité réelle du tirage de Y initial"), linewidth = 1) +
   
   #densité théorique
-  stat_function(fun = Y_densite, args = list(pars = pars_X0_1d), aes(color = "Densité théorique du tirage de Y"), 
+  stat_function(fun = Y_densite, args = list(pars = pars_X0_1d), aes(color = "Densité théorique du tirage de Y initial"), 
                 linewidth = 1) +
   
   #création de la légende
-  scale_color_manual(name = "Légende", values = c("Densité théorique du tirage de Y" = "red", 
-                                                  "Densité réelle du tirage de Y" = "blue")) +
+  scale_color_manual(name = "Légende", values = c("Densité théorique du tirage de Y initial" = "red", 
+                                                  "Densité réelle du tirage de Y initial" = "blue")) +
   
-  labs(x = "Valeur des observations Y", y = "Densité du comptage des observations Y")
+  labs(x = "Valeur des observations Y initiales", y = "Densité du comptage des observations Y initiales")
 
 
 ```
 
-Puis en deuxième dimension avec un histogramme 3D et une heatmap.
+Nous voyons que les deux courbes se recouvrent. Nous avons bien la bonne distribution de Y~0~. Nous représentons les données en deux dimensions avec un histogramme 3D et une heatmap.
 
 ```{r représentation des données pour des dimensions mulitples}
 #| echo: false
@@ -257,10 +242,10 @@ y_c <- cut(data_2d$y[,2], 70)
 z <- table(x_c, y_c)
 
 #Représentation de l'histogramme 3D
-hist3D(z=z, border="black", main = "Histogramme 3D de la répartition des données effectivement observées", xlab = "Valeur dim 1 de Y", ylab = "Valeur dim 2 de Y", zlab = "Comptage")
+hist3D(z=z, border="black", main = "Histogramme 3D des données initiales effectivement observées", xlab = "Valeur dim 1 de Y initial", ylab = "Valeur dim 2 de Y initial", zlab = "Comptage")
 
 #Représentation de la heatmap
-image2D(z=z, border="black",main = "Heatmap de la répartition des données effectivement observées", xlab = "Valeur dim 1 de Y", ylab = "Valeur dim 2 de Y")
+image2D(z=z, border="black",main = "Heatmap des données initiales effectivement observées", xlab = "Valeur dim 1 de Y initial", ylab = "Valeur dim 2 de Y initial")
 
 ```
 
@@ -306,7 +291,7 @@ ggplot() +
 
 ```
 
-Il est possible de représenter les données en deux dimensions sur ce graphe mais leur distribution gaussienne rend toujours un résultat brouillon qui empêche une bonne lecture.
+Il est possible de représenter les données en deux dimensions sur ce graphe mais leur distribution gaussienne rend un résultat brouillon qui empêche une bonne lecture. Nous pouvons cependant voir qu'il y à une convergence des deux séries vers l'origine du repère.
 
 ## Création de l'algorithme du filtre de Kalman
 
@@ -368,7 +353,7 @@ get_filtering_kalman <- function(pars_X0, pars, data){
     mutate(lower = mean - 1.96 * sqrt(Var),
            upper = mean + 1.96 * sqrt(Var))
   
-  return(list(mu_hat = mu_hat, V_hat = V_hat, result_df = formatted_data, Pred_kalm = P_hat))
+  return(list(mu_hat = mu_hat, V_hat = V_hat, result_df = formatted_data, Pred_kalm = P_hat, index = 1:n))
 }
 
 ```
@@ -379,302 +364,10 @@ Nous pouvons récupérer les estimations de l'algorithme.
 
 filter_1d <- get_filtering_kalman(pars_X0_1d, pars_1d, data_1d)
 filter_2d <- get_filtering_kalman(pars_X0_2d, pars_2d, data_2d)
-filter_3d <- get_filtering_kalman(pars_X0_3d, pars_3d, data_3d)
 
 ```
 
-Puis nous représentons les estimations pour chaque points X avec un intervalle de confiance à 95%.
-
-```{r représentation de l estimation du filtre de Kalman en dim1}
-#| echo: false
-
-n <- nrow(data_1d)
-filter_1d$index <- 1:n #création d'un index
-
-#création d'un dataframe auxiliaire pour récupérer les états
-df_long <- rbind(
-  data.frame(index = 1:n, value = data_1d$x, type = "x (état réel)"),
-  data.frame(index = 1:n, value = data_1d$y, type = "y (observation)"),
-  data.frame(index = filter_1d$index, value = filter_1d$result_df$mean, type = "mu_hat (estimation)")
-)
-
-df_long$type <- factor(df_long$type, levels = c("x (état réel)", "y (observation)", "mu_hat (estimation)"))
-
-df_filter <- data.frame(
-  index = 1:n,
-  mu_hat = filter_1d$mu_hat[,1],
-  lower = filter_1d$mu_hat[,1] - 1.96 * sqrt(filter_1d$V_hat[,1,1]),
-  upper = filter_1d$mu_hat[,1] + 1.96 * sqrt(filter_1d$V_hat[,1,1])
-)
-
-ggplot() +
-  #Création de l'IC autour de mu_hat (filtrage)
-  geom_ribbon(data = df_filter, aes(x = index, ymin = lower, ymax = upper, fill = "Intervalle de confiance"), alpha = 0.2) +
-
-  #Ligne de mu_hat
-  geom_line(data = df_filter, aes(x = index, y = mu_hat), color = "red", linewidth = 1, show.legend = FALSE) +
-
-  #Points et ligne pour la légende
-  geom_point(data = df_long, aes(x = index, y = value, color = type, shape = type), size = 2) +
-
-  #Création d'un point invisible pour faire apparaître les légendes
-  geom_point(data = df_filter, aes(x = index, y = mu_hat, color = "mu_hat (estimation)", shape = "mu_hat (estimation)"), 
-             size = 1, alpha = 0) +
-
-  # Légendes
-  scale_color_manual(name = "Légende",
-                     values = c("x (état réel)" = "black",
-                                "y (observation)" = "blue",
-                                "mu_hat (estimation)" = "red",
-                                "Intervalle de confiance" = "cyan4")) +
-  scale_shape_manual(name = "Légende",
-                     values = c("x (état réel)" = 16,
-                                "y (observation)" = 4, 
-                                "mu_hat (estimation)" = 1)) +
-  scale_fill_manual(name = "Légende",
-                    values = c("Intervalle de confiance" = "cyan4")) +
-
-  labs(x = "Numéro de l'observation", y = "Valeur",
-       title = "Estimation de x par le Kalman filter avec intervalle de confiance à 95%") 
-
-```
-
-L'estimation semble bien suivre les valeur de la variable estimée. On observe aussi que l'intervalle de confiance n'apparait quasiment pas; c'est sûrement dû a la variance très faible rendue par l'algorithme ce qui implique que l'intervalle prend des valeurs non significatives par rapport à celle des points obtenus.
-
-```{r représentation de l estimation du filtre de Kalman en dim2}
-#| echo: false
-
-n2 <- nrow(data_2d)
-filter_2d$index <- 1:n2 #création d'un index
-
-df_filter_2d <- data.frame(
-  index = 1:n2,
-  mu_hat_x = filter_2d$mu_hat[,1],
-  mu_hat_y = filter_2d$mu_hat[,2],
-  lower_x = filter_2d$mu_hat[,1] - 1.96*sqrt(filter_2d$V_hat[1,1,]), #création des valeurs de l'IC pour la première variable
-  upper_x = filter_2d$mu_hat[,1] - 1.96*sqrt(filter_2d$V_hat[1,1,]),
-  lower_y = filter_2d$mu_hat[,2] - 1.96*sqrt(filter_2d$V_hat[2,2,]), #création des valeurs de l'IC pour la deuxième variable
-  upper_y = filter_2d$mu_hat[,2] + 1.96*sqrt(filter_2d$V_hat[2,2,])
-)
-
-#création d'un dataframe auxiliaire pour récupérer les états
-df_long_2d <- rbind(
-  data.frame(index = 1:n2, value = data_2d$x[,1], type = "x (état réel 1)"),
-  data.frame(index = 1:n2, value = data_2d$x[,2], type = "x (état réel 2)"),
-  data.frame(index = 1:n2, value = data_2d$y[,1], type = "y (observation 1)"),
-  data.frame(index = 1:n2, value = data_2d$y[,2], type = "y (observation 2)"),
-  data.frame(index = filter_2d$index, value = filter_2d$mu_hat[,1], type = "mu_hat (estimation 1)"),
-  data.frame(index = filter_2d$index, value = filter_2d$mu_hat[,2], type = "mu_hat (estimation 2)")
-)
-
-df_long_2d$type <- factor(df_long_2d$type, levels = c("x (état réel 1)", "x (état réel 2)", "y (observation 1)", "y (observation 2)", "mu_hat (estimation 1)", "mu_hat (estimation 2)"))
-
-
-
-ggplot() +
-  #Création de l'IC autour de mu_hat (filtrage)
-  geom_ribbon(data = df_filter_2d, aes(x = index, ymin = lower_x, ymax = upper_x, fill = "Intervalle de confiance"), alpha = 0.2) +
-
-  #Ligne de mu_hat
-  geom_line(data = df_filter_2d, aes(x = index, y = mu_hat_x), color = "red", linewidth = 1, show.legend = FALSE) +
-
-  #Points et ligne pour la légende
-  geom_point(data = df_long_2d, aes(x = index, y = value, color = type, shape = type), size = 2, na.rm = TRUE) +
-
-  #Création d'un point invisible pour faire apparaître les légendes
-  geom_point(data = df_filter_2d, aes(x = index, y = mu_hat_x, color = "mu_hat (estimation 1)", shape = "mu_hat (estimation 1)"), 
-             size = 1, alpha = 0) +
-
-  # Légendes
-  scale_color_manual(name = "Légende",
-                     values = c("x (état réel 1)" = "black",
-                                "y (observation 1)" = "blue",
-                                "mu_hat (estimation 1)" = "red",
-                                "Intervalle de confiance" = "cyan4")) +
-  scale_shape_manual(name = "Légende",
-                     values = c("x (état réel 1)" = 16,
-                                "y (observation 1)" = 4, 
-                                "mu_hat (estimation 1)" = 1)) +
-  scale_fill_manual(name = "Légende",
-                    values = c("Intervalle de confiance" = "cyan4")) +
-
-  labs(x = "Numéro de l'observation", y = "Valeur",
-       title = "Estimation de la dimension 1 de x par le Kalman filter avec intervalle de confiance à 95%") 
-
-
-
-ggplot() +
-  #Création de l'IC autour de mu_hat (filtrage)
-  geom_ribbon(data = df_filter_2d, aes(x = index, ymin = lower_y, ymax = upper_y, fill = "Intervalle de confiance"), alpha = 0.2) +
-
-  #Ligne de mu_hat
-  geom_line(data = df_filter_2d, aes(x = index, y = mu_hat_y), color = "red", linewidth = 1, show.legend = FALSE) +
-
-  #Points et ligne pour la légende
-  geom_point(data = df_long_2d, aes(x = index, y = value, color = type, shape = type), size = 2, na.rm = TRUE) +
-
-  #Création d'un point invisible pour faire apparaître les légendes
-  geom_point(data = df_filter_2d, aes(x = index, y = mu_hat_y, color = "mu_hat (estimation 2)", shape = "mu_hat (estimation 2)"), 
-             size = 1, alpha = 0) +
-
-  # Légendes
-  scale_color_manual(name = "Légende",
-                     values = c("x (état réel 2)" = "black",
-                                "y (observation 2)" = "blue",
-                                "mu_hat (estimation 2)" = "red",
-                                "Intervalle de confiance" = "cyan4")) +
-  scale_shape_manual(name = "Légende",
-                     values = c("x (état réel 2)" = 16,
-                                "y (observation 2)" = 4, 
-                                "mu_hat (estimation 2)" = 1)) +
-  scale_fill_manual(name = "Légende",
-                    values = c("Intervalle de confiance" = "cyan4")) +
-
-  labs(x = "Numéro de l'observation", y = "Valeur",
-       title = "Estimation de la dimension 2 de x par le Kalman filter avec intervalle de confiance à 95%") 
-
-```
-
-Pour la première dimension, l'estimation semble bien suivre les valeurs de $X$ et l'intervalle de confiance récupère bien certains points de la variable aléatoire.
-
-Pour la deuxième dimension, l'estimation semble moins bien représenter les valeurs de $X$ en particulier ses variations. L'intervalle de confiance disparait rapidement après plusieurs valeurs ce qui est dû encore une fois aux faibles valeurs des variances couplé au fait que cet intevalle de confiance varie selon le nombre de mesures.
-
-## Création de l'algorithme du lisseur RTS
-
-Nous implémentons maintenant l'algorithme du lisseur RTS pour nos données.
-
-```{r création de l algorithme du lisseur RTS}
-
-get_smoothering_RTS <- function(ini,pars){
-  
-  #initialisation du tableau de sortie
-  n <- nrow(ini$mu_hat)
-  mu_hat = matrix(nrow = n, ncol = pars$dim_x)
-  V_hat = array(dim = c(pars$dim_x, pars$dim_x, n))
-  
-  mu_hat[n,] <- t(ini$mu_hat[n,])
-  V_hat[,,n] <- ini$V_hat[,,n]
-  
-  #boucle de l'algorithme
-  for (i in (n-1):1){
-
-    C <- ini$V_hat[,,i] %*% t(pars$matF) %*% solve(ini$Pred_kalm[,,i])
-    mu_hat_loop <- ini$mu_hat[i,] + C %*% (mu_hat[i+1,] - pars$matF %*% ini$mu_hat[i,])
-    V_hat_loop <- ini$V_hat[,,i] + C %*% (V_hat[,,i+1] - ini$Pred_kalm[,,i]) %*% t(C)
-    
-    mu_hat[i,] <- as.matrix(mu_hat_loop)
-    V_hat[,,i] <- V_hat_loop
-
-  }
-marginal_variances <- matrix(NA_real_, nrow = n, ncol = pars$dim_x)
-  for (i in 1:n) {
-    marginal_variances[i, ] <- diag(matrix(V_hat[,,i], nrow = pars$dim_x))
-  }
-  
-  colnames(mu_hat) <- paste0("M", 1:pars$dim_x)
-  colnames(marginal_variances) <- paste0("V", 1:pars$dim_x)
-  
-  means <- as.data.frame(mu_hat)
-  marginal_variances <- as.data.frame(marginal_variances)
-  
-  formatted_data <- bind_cols(means, marginal_variances)%>% 
-    mutate(index = 1:nrow(.))%>% 
-    pivot_longer(
-      cols = -index,
-      names_to = c(".value", "dimension"),
-      names_pattern = "([MV])(\\d+)"
-    ) |>
-    rename(mean = M, Var = V) |>
-    mutate(lower = mean - 1.96 * sqrt(Var),
-           upper = mean + 1.96 * sqrt(Var))
-  return(list(mu_hat = mu_hat, V_hat = V_hat, result_df = formatted_data))
-}
-
-```
-
-Nous pouvons récuperer les estimations.
-
-```{r utilisation de l algorithme de lissage}
-
-smoother_1d <- get_smoothering_RTS(filter_1d, pars_1d)
-smoother_2d <- get_smoothering_RTS(filter_2d, pars_2d)
-smoother_3d <- get_smoothering_RTS(filter_3d, pars_3d)
-
-```
-
-Afin de mieux comprendre ces algorithmes nous les mettons en concurrence sur ce graphe.
-
-```{r représentation de l estimation du filtre et du lisseur de Kalman en dim1}
-#| echo: false
-
-
-smoother_1d$index <- 1:n #création d'un index
-
-df_smoother <- data.frame(
-  index = 1:n,
-  mu_hat = smoother_1d$mu_hat[,1],
-  lower = smoother_1d$mu_hat[,1] - 1.96 * sqrt(smoother_1d$V_hat[,1,1]),
-  upper = smoother_1d$mu_hat[,1] + 1.96 * sqrt(smoother_1d$V_hat[,1,1])
-)
-
-#création d'un dataframe auxiliaire pour récupérer les états
-df_long2 <- rbind(
-  data.frame(index = 1:n, value = data_1d$x, type = "x (état réel)"),
-  data.frame(index = 1:n, value = data_1d$y, type = "y (observation)"),
-  data.frame(index = filter_1d$index, value = filter_1d$result_df$mean, type = "mu_hat (filtrage)"),
-  data.frame(index = smoother_1d$index, value = smoother_1d$result_df$mean, type = "mu_hat (lissage)")
-)
-
-df_long2$type <- factor(df_long2$type, levels = c("x (état réel)", "y (observation)", "mu_hat (filtrage)", "mu_hat (lissage)"))
-
-
-ggplot() +
-  # Ribbon avec fill
-  geom_ribbon(data = df_smoother, aes(x = index, ymin = lower, ymax = upper, fill = "Intervalle de confiance"), alpha = 0.2) +
-
-  # Lignes avec color
-  geom_line(data = df_filter, aes(x = index, y = mu_hat, color = "mu_hat (filtrage)"), linewidth = 1) +
-  geom_line(data = df_smoother, aes(x = index, y = mu_hat, color = "mu_hat (lissage)"), linewidth = 1, alpha = 0.5) +
-
-  # Points visibles
-  geom_point(data = df_long2, aes(x = index, y = value, color = type, shape = type), size = 2) +
-
- 
-
-  scale_color_manual(name = "Légende",
-                     values = c("x (état réel)" = "black",
-                                "y (observation)" = "blue",
-                                "mu_hat (filtrage)" = "red",
-                                "mu_hat (lissage)" = "darkgreen",
-                                "Intervalle de confiance" = "cyan4")) +
-
-  scale_fill_manual(name = "Légende",
-                    values = c("Intervalle de confiance" = "cyan4")) +
-
-  scale_shape_manual(name = "Légende",
-                     values = c("x (état réel)" = 16,
-                                "y (observation)" = 4,
-                                "mu_hat (filtrage)" = 1,
-                                "mu_hat (lissage)" = 1,
-                                "Intervalle de confiance" = NA))+
-
-  labs(x = "Numéro de l'observation", y = "Valeur",
-       title = "Estimation et lissage de x avec intervalle de confiance à 95%")
-
-```
-
-Comme le graphe précédent, l'estimateur semble bon et l'intervalle de confiance n'apparait pas pour les mêmes raisons.
-
-```{r calcul de la distance entre les deux estimations}
-
-estimation_variation <- abs(smoother_1d$mu_hat - filter_1d$mu_hat)
-print(mean(estimation_variation))
-
-```
-
-Nous voyons de plus qu'il n'apparait qu'une courbe; ceci est dû au fait que les deux estimateurs donnent les mêmes valeurs dans ce cas comme nous l'indique la distance moyenne entre les deux estimateurs de $\mu$ ci-dessus.
-
-```{r}
+```{r fonction de création de graphe}
 #| echo: false
 
 plot_dimension <- function(result_df, data, filter_result_df = NULL, dim_to_plot = 1) {
@@ -745,78 +438,197 @@ names(shapes) <- c(
 fills <- c("cyan4")
 names(fills) <- c("Intervalle de confiance")
 
-ggplot() +
+plot <- ggplot() +
   geom_ribbon(data = ribbon_df, aes(x = index, ymin = lower, ymax = upper, fill = type), alpha = 0.2) +
-  geom_line(data = filter_df, aes(x = index, y = mean, color = type), size = 1) +
-  geom_line(data = smoother_df, aes(x = index, y = mean, color = type), size = 1, alpha = 0.6) +
+  geom_line(data = smoother_df, aes(x = index, y = mean, color = type), linewidth = 1, alpha = 0.6) +
   geom_point(data = points_df, aes(x = index, y = value, color = type, shape = type), size = 2, na.rm = TRUE) +
   scale_color_manual(name = "Légende", values = colors) +
   scale_fill_manual(name = "Légende", values = fills) +
   scale_shape_manual(name = "Légende", values = shapes) +
   labs(x = "Numéro de l'observation", y = "Valeur",
-       title = paste0("Estimation et lissage de la dim ", dim_to_plot, " de x avec intervalle de confiance à 95%")) 
+       title = paste0("Estimation et lissage de la dim ", dim_to_plot, " de x avec intervalle de confiance à 95%"))
+
+if (!is.null(filter_result_df)) {
+  plot <- plot + geom_line(data = filter_df, aes(x = index, y = mean, color = type), linewidth = 1)
+}
+print(plot)
 }
 
 ```
+
+Puis nous représentons les estimations pour chaque points X avec un intervalle de confiance à 95%.
+
+```{r représentation de l estimation du filtre de Kalman en dim1}
+#| echo: false
+
+plot_dimension(filter_1d$result_df, data_1d)
+
+```
+
+L'estimation suit bien les valeurs de la variable estimée. On observe aussi que l'intervalle de confiance n'apparait quasiment pas; c'est sûrement dû a la variance très faible rendue par l'algorithme ce qui implique que l'intervalle prend des valeurs non significatives par rapport à celle des points obtenus.
+
+```{r représentation de l estimation du filtre de Kalman de la dimension 1 en dim2}
+#| echo: false
+
+plot_dimension(filter_2d$result_df, data_2d)
+
+```
+
+```{r représentation de l estimation du filtre de Kalman de la dimension 2 en dim2}
+#| echo: false
+
+plot_dimension(filter_2d$result_df, data_2d, dim_to_plot = 2)
+
+```
+
+Encore une fois l'estimation semble très bonne pour les deux dimensions et l'intervalle de confiance n'apparaît quasiment pas.
+
+## Création de l'algorithme du lisseur RTS
+
+Nous implémentons maintenant l'algorithme du lisseur RTS pour nos données.
+
+```{r création de l algorithme du lisseur RTS}
+
+get_smoothering_RTS <- function(ini,pars){
+  
+  #initialisation du tableau de sortie
+  n <- nrow(ini$mu_hat)
+  mu_hat = matrix(nrow = n, ncol = pars$dim_x)
+  V_hat = array(dim = c(pars$dim_x, pars$dim_x, n))
+  
+  mu_hat[n,] <- t(ini$mu_hat[n,])
+  V_hat[,,n] <- ini$V_hat[,,n]
+  
+  #boucle de l'algorithme
+  for (i in (n-1):1){
+
+    C <- ini$V_hat[,,i] %*% t(pars$matF) %*% solve(ini$Pred_kalm[,,i])
+    mu_hat_loop <- ini$mu_hat[i,] + C %*% (mu_hat[i+1,] - pars$matF %*% ini$mu_hat[i,])
+    V_hat_loop <- ini$V_hat[,,i] + C %*% (V_hat[,,i+1] - ini$Pred_kalm[,,i]) %*% t(C)
+    
+    mu_hat[i,] <- as.matrix(mu_hat_loop)
+    V_hat[,,i] <- V_hat_loop
+
+  }
+marginal_variances <- matrix(NA_real_, nrow = n, ncol = pars$dim_x)
+  for (i in 1:n) {
+    marginal_variances[i, ] <- diag(matrix(V_hat[,,i], nrow = pars$dim_x))
+  }
+  
+  colnames(mu_hat) <- paste0("M", 1:pars$dim_x)
+  colnames(marginal_variances) <- paste0("V", 1:pars$dim_x)
+  
+  means <- as.data.frame(mu_hat)
+  marginal_variances <- as.data.frame(marginal_variances)
+  
+  formatted_data <- bind_cols(means, marginal_variances)%>% 
+    mutate(index = 1:nrow(.))%>% 
+    pivot_longer(
+      cols = -index,
+      names_to = c(".value", "dimension"),
+      names_pattern = "([MV])(\\d+)"
+    ) %>%
+    rename(mean = M, Var = V) %>%
+    mutate(lower = mean - 1.96 * sqrt(Var),
+           upper = mean + 1.96 * sqrt(Var))
+  return(list(mu_hat = mu_hat, V_hat = V_hat, result_df = formatted_data))
+}
+
+```
+
+Nous pouvons récuperer les estimations.
+
+```{r utilisation de l algorithme de lissage}
+
+smoother_1d <- get_smoothering_RTS(filter_1d, pars_1d)
+smoother_2d <- get_smoothering_RTS(filter_2d, pars_2d)
+
+```
+
+Afin de mieux comprendre ces algorithmes nous les mettons en concurrence sur ce graphe.
 
 ```{r représentation de l estimation du filtre et du lisseur de Kalman en dim1}
 #| echo: false
+
+plot_dimension(smoother_1d$result_df,data_1d,filter_1d$result_df)
+
+```
+
+Les deux estimations sont confondues il est difficile de les distinguer mais im semble qu'elles suivent toutes deux la série des observations réélles.
+
+Comme le graphe précédent, l'estimateur semble bon et l'intervalle de confiance n'apparait pas pour les mêmes raisons.
+
+```{r calcul de la distance entre les deux estimations}
+
+estimation_variation <- abs(smoother_1d$mu_hat - filter_1d$mu_hat)
+print(mean(estimation_variation))
+
+```
+
+Nous voyons de plus qu'il n'apparait qu'une courbe; ceci est dû au fait que les deux estimateurs donnent les mêmes valeurs dans ce cas comme nous l'indique la distance moyenne entre les deux estimateurs de $\mu$ ci-dessus.
+
+```{r représentation de l estimation du filtre et du lisseur de Kalman de la dimension 1 en dim2}
+#| echo: false
+ 
 plot_dimension(smoother_2d$result_df,data_2d,filter_2d$result_df)
+
 ```
 
-Pour la première variable, nous voyons que les deux estimations sont confondues dans la majorité des points, cependant, il existe malgré tout des endroit où une différence existe entre les valeurs contrairement au cas en dimension 1. De plus nous pouvons observer que l'intervalle de confiance est très petit autour de l'estimation et est constant. Cela est dû au fait que la variance de l'estimation est quasi-constante pour tout les points $\hat{\mu}$ et que le nombre de points observé est constant vu que la méthode du smoothing utilise la totalité des points des observations.
+Pour la première variable, nous voyons que les deux estimations sont quasiment confondues ce qui nous conforte dans la qualité de celles-ci.
 
-```{r représentation de l estimation du filtre et du lisseur de Kalman en dim2}
+```{r représentation de l estimation du filtre et du lisseur de Kalman de la dimension 2 en dim2}
 #| echo: false
+
 plot_dimension(smoother_2d$result_df,data_2d,filter_2d$result_df,2)
-```
-
-Sur la seconde variable, il y a de vraies différences entre les deux estimations mais cette fois-ci l'intervalle de confiance n'apparait pas. C'est sûrement encore dû aux valeurs prises par la variance de l'estimation.
-
-## Filtrage de Doucet
-
-```{r}
 
 ```
 
-```{r tests et stockage de code}
-#| echo: false
+Mêmes commantaires pour la deuxième dimension.
 
-get_simulation_alt <- function(n_sim, pars){
-  x <- mixtools::rmvnorm(n = n_sim, mu = pars$m_x,
-                         sigma = as.matrix(pars$S_x))
-  y <- t(pars$A %*% t(x) +  pars$b) +
-    mixtools::rmvnorm(n = n_sim, mu = rep(0, pars$dim_y),
-                      sigma = as.matrix(pars$S_y))
-  return(list(x = x, y = y))
-}
+Nous allons représenter les éllipses de confiance de deux points arbitraires (point n°16 et n°500) pour cela nous avons besoin de définir la *distance de Mahalanobis* donnée par la formule :
 
-```
+$$
+D_M(\mathbf{x}) = \sqrt{(\mathbf{x} - \boldsymbol{\mu})^\top \mathbf{\Sigma}^{-1} (\mathbf{x} - \boldsymbol{\mu})}
+$$
 
-```{r}
+Nous étudierons son carré :
+
+$$
+D_M^{2}(\mathbf{x}) = (\mathbf{x} - \boldsymbol{\mu})^\top \mathbf{\Sigma}^{-1} (\mathbf{x} - \boldsymbol{\mu})
+$$
+
+sous la forme de la fonction ci-dessous.
+
+```{r fonction mahalanobis}
 
 get_mahalanobis <- function(x, y, mu, sigma) {
   vect <- c(x, y) - mu
   return(t(vect) %*% solve(sigma) %*% vect)
 }
 
+```
+
+Ci dessous les points des estimations du filtrage et du lissage avec mis en couleur le point n°16 en bleu et le point n°500 en rouge.
+
+Le rectangle bleu clair est le zoom des graphes des ellipses de confiance qui viennent ensuite.
+
+```{r étude des ellipses de confiance}
+#| echo: false
+
 q <- qchisq(.95, pars_2d$dim_x)
 
-point_filter_16 <- df_filter_2d[16, ]
-point_filter_500 <- df_filter_2d[500, ]
 
-df_smoother_2d <- data.frame(
-  index = 1:n2,
-  mu_hat_x = smoother_2d$mu_hat[,1],
-  mu_hat_y = smoother_2d$mu_hat[,2],
-  lower_x = smoother_2d$mu_hat[,1] - 1.96*sqrt(smoother_2d$V_hat[1,1,]), #création des valeurs de l'IC pour la première variable
-  upper_x = smoother_2d$mu_hat[,1] - 1.96*sqrt(smoother_2d$V_hat[1,1,]),
-  lower_y = smoother_2d$mu_hat[,2] - 1.96*sqrt(smoother_2d$V_hat[2,2,]), #création des valeurs de l'IC pour la deuxième variable
-  upper_y = smoother_2d$mu_hat[,2] + 1.96*sqrt(smoother_2d$V_hat[2,2,])
-)
+point_filter_16 <- as.data.frame(t(filter_2d$mu_hat[16, ]))
+colnames(point_filter_16) <- c("x", "y")
 
-point_smoother_16 <- df_smoother_2d[16, ]
-point_smoother_500 <- df_smoother_2d[500, ]
+point_filter_500 <- as.data.frame(t(filter_2d$mu_hat[500, ]))
+colnames(point_filter_500) <- c("x", "y")
+
+point_smoother_16 <- as.data.frame(t(smoother_2d$mu_hat[16, ]))
+colnames(point_smoother_16) <- c("x", "y")
+
+point_smoother_500 <- as.data.frame(t(smoother_2d$mu_hat[500, ]))
+colnames(point_smoother_500) <- c("x", "y")
 
 mu_filter_16 <- as.numeric(filter_2d$mu_hat[16, ])  
 sigma_filter_16 <- filter_2d$V_hat[,,16]
@@ -830,11 +642,11 @@ sigma_smoother_16 <- smoother_2d$V_hat[,,16]
 mu_smoother_500 <- as.numeric(smoother_2d$mu_hat[500, ])  
 sigma_smoother_500 <- smoother_2d$V_hat[,,500]
 
-x_seq_16 <- seq(df_filter_2d$mu_hat_x[16] - 10, df_filter_2d$mu_hat_x[16] + 10, by = .1)
-y_seq_16 <- seq(df_filter_2d$mu_hat_y[16] - 10, df_filter_2d$mu_hat_y[16] + 10, by = .1)
+x_seq_16 <- seq(filter_2d$mu_hat[16,1] - 10, filter_2d$mu_hat[16,1] + 10, by = .1)
+y_seq_16 <- seq(filter_2d$mu_hat[16,2] - 10, filter_2d$mu_hat[16,2] + 10, by = .1)
 
-x_seq_500 <- seq(df_filter_2d$mu_hat_x[500] - 10, df_filter_2d$mu_hat_x[500] + 10, by = .1)
-y_seq_500 <- seq(df_filter_2d$mu_hat_y[500] - 10, df_filter_2d$mu_hat_y[500] + 10, by = .1)
+x_seq_500 <- seq(filter_2d$mu_hat[500,1] - 10, filter_2d$mu_hat[500,1] + 10, by = .1)
+y_seq_500 <- seq(filter_2d$mu_hat[500,2] - 10, filter_2d$mu_hat[500,2] + 10, by = .1)
 
 grille_points1 <- expand.grid(x = x_seq_16, y = y_seq_16)
 grille_points2 <- expand.grid(x = x_seq_500, y = y_seq_500)
@@ -869,50 +681,56 @@ area_smoother_500 <- grille_points2[dist_maha_smoother_500 <= q, ]
 
 
 ggplot()+
-  geom_point(data = df_filter_2d,
-             aes(x = mu_hat_x, y = mu_hat_y),
+  geom_point(data = filter_2d$mu_hat,
+             aes(x = filter_2d$mu_hat[,1], y = filter_2d$mu_hat[,2]),
              size = 0.4)+
-geom_point(data = point_filter_16,
-             aes(x = mu_hat_x, y = mu_hat_y),
+  geom_point(data = point_filter_16,
+             aes(x = x, y = y),
              size = 2, col = 'red') +
   geom_point(data = point_filter_500,
-             aes(x = mu_hat_x, y = mu_hat_y),
+             aes(x = x, y = y),
              size = 2, col = 'blue') +
   geom_tile(data = area_filter_16, aes(x = x, y = y), fill = "red", alpha = .4)+
   geom_tile(data = area_filter_500, aes(x = x, y = y), fill = "blue", alpha = .4)+
   geom_tile(data = grille_points1, aes(x = x, y = y), fill = "lightblue", alpha = 0.5)+
-  geom_tile(data = grille_points2, aes(x = x, y = y), fill = "lightblue", alpha = 0.5)
+  geom_tile(data = grille_points2, aes(x = x, y = y), fill = "lightblue", alpha = 0.5)+
+  labs(x = "Dimension 1 du filtrage", y = "Dimension 2 du filtrage")+
+  ggtitle("Représentation des points estimés par la méthode du filtrage")
 
 
 
 ggplot()+
-  geom_point(data = df_smoother_2d,
-             aes(x = mu_hat_x, y = mu_hat_y),
+  geom_point(data = smoother_2d$mu_hat,
+             aes(x = smoother_2d$mu_hat[,1], y = smoother_2d$mu_hat[,2]),
              size = 0.4)+
 geom_point(data = point_smoother_16,
-             aes(x = mu_hat_x, y = mu_hat_y),
+             aes(x = x, y = y),
              size = 2, col = 'red') +
   geom_point(data = point_smoother_500,
-             aes(x = mu_hat_x, y = mu_hat_y),
+             aes(x = x, y = y),
              size = 2, col = 'blue') +
   geom_tile(data = area_smoother_16, aes(x = x, y = y), fill = "red", alpha = .4)+
   geom_tile(data = area_smoother_500, aes(x = x, y = y), fill = "blue", alpha = .4)+
   geom_tile(data = grille_points1, aes(x = x, y = y), fill = "lightblue", alpha = 0.5)+
-  geom_tile(data = grille_points2, aes(x = x, y = y), fill = "lightblue", alpha = 0.5)
+  geom_tile(data = grille_points2, aes(x = x, y = y), fill = "lightblue", alpha = 0.5)+
+  labs(x = "Dimension 1 du lissage", y = "Dimension 2 du lissage")+
+  ggtitle("Représentation des points estimés par la méthode du lissage")
 ```
 
-```{r}
-x_min <- point_filter_16$mu_hat_x - 5  
-x_max <- point_filter_16$mu_hat_x + 5  
-y_min <- point_filter_16$mu_hat_y - 5  
-y_max <- point_filter_16$mu_hat_y + 5  
+```{r ellipse de confiance pour l estimation numéro 16}
+#| echo: false
+
+x_min_16 <- point_filter_16$x - 5  
+x_max_16 <- point_filter_16$x + 5  
+y_min_16 <- point_filter_16$y - 5  
+y_max_16 <- point_filter_16$y + 5  
 
 ggplot() +
-  geom_point(data = df_filter_2d,
-             aes(x = mu_hat_x, y = mu_hat_y),
+  geom_point(data = filter_2d$mu_hat,
+             aes(x = filter_2d$mu_hat[,1], y = filter_2d$mu_hat[,2]),
              size = 0.4) +
   geom_point(data = point_filter_16,
-             aes(x = mu_hat_x, y = mu_hat_y),
+             aes(x = x, y = y),
              size = 2, col = 'red') +
   geom_tile(data = area_filter_16,
             aes(x = x, y = y),
@@ -920,28 +738,96 @@ ggplot() +
   geom_tile(data = area_smoother_16,
             aes(x = x, y = y),
             fill = "green3", alpha = 0.3) +
-  coord_cartesian(xlim = c(x_min, x_max), ylim = c(y_min, y_max))
+  coord_cartesian(xlim = c(x_min_16, x_max_16), ylim = c(y_min_16, y_max_16))+
+  labs(x = "Dimension 1 du filtrage", y = "Dimension 2 du filtrage")+
+  ggtitle("Ellipses des confiances des méthodes du lissage et du filtrage pour le point 16")
 ```
 
-```{r}
-x_min <- point_filter_500$mu_hat_x - 5  
-x_max <- point_filter_500$mu_hat_x + 5  
-y_min <- point_filter_500$mu_hat_y - 5  
-y_max <- point_filter_500$mu_hat_y + 5  
+Pour l'estimation du point n°16, nous avons représenté l'ellipse de confiance du filtrage en rouge et celle du lissage en vert. On remarque que les deux surfaces sont de même forme, se chevauchent sur la majorité de leur surface. Il est néanmoins visible que l'aire de l'ellipse verte donc du lissage est moins grande que celle du filtrage, donc de la rouge.
+
+```{r ellipse de confiance pour l estimation numéro 500}
+#| echo: false
+
+x_min_500 <- point_filter_500$x - 5  
+x_max_500 <- point_filter_500$x + 5  
+y_min_500 <- point_filter_500$y - 5  
+y_max_500 <- point_filter_500$y + 5  
 
 ggplot() +
-  geom_point(data = df_filter_2d,
-             aes(x = mu_hat_x, y = mu_hat_y),
+  geom_point(data = filter_2d$mu_hat,
+             aes(x = filter_2d$mu_hat[,1], y = filter_2d$mu_hat[,2]),
              size = 0.4) +
   geom_point(data = point_filter_500,
-             aes(x = mu_hat_x, y = mu_hat_y),
+             aes(x = x, y = y),
              size = 2, col = 'blue') +
-  geom_tile(data = area_2,
+  geom_tile(data = area_filter_500,
             aes(x = x, y = y),
             fill = "blue", alpha = 0.4) +
-    geom_tile(data = area_smoother_500,
+  geom_tile(data = area_smoother_500,
             aes(x = x, y = y),
             fill = "grey3", alpha = 0.3) +
-  coord_cartesian(xlim = c(x_min, x_max), ylim = c(y_min, y_max))
+  coord_cartesian(xlim = c(x_min_500, x_max_500), ylim = c(y_min_500, y_max_500))+
+    labs(x = "Dimension 1 du filtrage", y = "Dimension 2 du filtrage")+
+  ggtitle("Ellipses des confiances des méthodes du lissage et du filtrage pour le point 500")
 
+```
+
+Pour le point n°500, nous avons représenté l'ellipse de confiance du filtrage en bleu et celle du lissage en gris. La ressemble est d'autant plus forte à l'exception que cette fois-ci l'ellipse de lissage en gris est incluse dans l'ellipse de filtrage bleu.
+
+# Filtrage de Doucet
+
+La méthode du filtre de Kalman se reposait sur le fait que les distributions étudiées étaient des lois normales multivariées linéaires. Ceci permettait une résolution calculatoire qui n'est, dans les faits, que rarement possible pour les autres distributions. L'objectif de l'algorithme du Doucet est de s'attaquer aux cas où la résolution des intégrales n'est pas possible dans le modèle HMM.
+
+Pour cela, cet algorithme utilise la méthode de Monte-Carlo. Dans un premier temps, nous allons réutiliser le contexte de la partie du filtre de Kalman afin de montrer l'équivalence des méthodes dans le cas spécifique des lois normales.
+
+## Contexte du filtre de Kalman
+
+Nous commençons par étudier le cas initial, pour cela nous commençons par créer la fonction *get_MCMC_SNIS* qui donne l'estimateur de Monte-Carlo d'échantillonage préférentiel autonormalisé.
+
+```{r SNIS}
+
+get_MCMC_SNIS <- function(fun, pfun, qfun, sampling_method, m = 1000){
+  
+  samples <- sampling_method(m)
+  W <- pfun(samples)/ qfun(samples)
+  W_tilde <- W / sum(W)
+  I_hat <- sum(W_tilde * fun(samples))
+  
+  return(list(W_tilde = W_tilde, X = samples, I_hat = I_hat))
+  
+}
+
+```
+
+Nous récupérons l'estimateur pour une dimension de X~0~ de la fonction ci-dessus et nous le comparons avec celui du filtrage de Kalman et du lissage RTS.
+
+```{r utilisation du SNIS en dim1 dans le contexte précédent}
+#| echo: false
+
+id <- function(x) return(x)
+pfun <- function(x) return(dnorm(x,pars_X0_1d$m_x,sqrt(pars_X0_1d$S_x)))
+get_samples_X0 <- function(m) return(rnorm(m, mean = pars_X0_1d$m_x, sd = sqrt(pars_X0_1d$S_x)))
+
+
+MCMC_SNIS_X0 <- get_MCMC_SNIS(id, pfun, id, get_samples_X0)
+
+paste0("Différence absolue pour le terme d'initialisation entre l'estimateur de Monte-Carlo et celui du filtre de Kalman : ", round(abs(MCMC_SNIS_X0$I_hat - filter_1d$mu_hat[1]),4))
+
+paste0("Différence absolue pour le terme d'initialisation entre l'estimateur de Monte-Carlo et celui du lisseur RTS : ", round(abs(MCMC_SNIS_X0$I_hat - smoother_1d$mu_hat[1]),4))
+```
+
+La différence absolue étant d'un ordre de grandeur bien inférieur de celui des valeurs nous pouvons être satisfait par la proximité des estimateurs.
+
+
+```{r tests et stockage de code}
+#| echo: false
+
+get_simulation_alt <- function(n_sim, pars){
+  x <- mixtools::rmvnorm(n = n_sim, mu = pars$m_x,
+                         sigma = as.matrix(pars$S_x))
+  y <- t(pars$A %*% t(x) +  pars$b) +
+    mixtools::rmvnorm(n = n_sim, mu = rep(0, pars$dim_y),
+                      sigma = as.matrix(pars$S_y))
+  return(list(x = x, y = y))
+}
 ```
