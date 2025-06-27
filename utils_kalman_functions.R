@@ -7,10 +7,10 @@ get_filtering_kalman <- function(pars_X0, pars, data){
   V_hat = P_hat = array(dim = c(pars$dim_x, pars$dim_x, n))
   
   #initialisation de l'algorithme pour le premier terme
-  K <- pars_X0$S_x %*% t(pars$A) %*% solve(pars$A %*% pars_X0$S_x %*% t(pars$A) + pars$S_y)
-  mu <- pars_X0$m_x + K %*% (data$y[1,] - pars$A %*% pars_X0$m_x)
-  V <- (diag(pars$dim_x) - K %*% pars$A) %*% pars_X0$S_x
-  Pred_kalm <- pars$matF %*% V %*% t(pars$matF) + pars$S_x
+  K <- pars_X0$S_x %*% t(pars_X0$A) %*% solve(pars_X0$A %*% pars_X0$S_x %*% t(pars_X0$A) + pars_X0$S_y)
+  mu <- pars_X0$m_x + K %*% (data$y[1,] - pars_X0$A %*% pars_X0$m_x)
+  V <- (diag(pars_X0$dim_x) - K %*% pars_X0$A) %*% pars_X0$S_x
+  Pred_kalm <- pars_X0$matF %*% V %*% t(pars_X0$matF) + pars_X0$S_x
   
   mu_hat[1,] <- as.numeric(mu)
   V_hat[,,1] <- V
