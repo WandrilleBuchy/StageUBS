@@ -27,7 +27,7 @@ pars_1d <- list(dim_x = 1, #pas de valeur moyenne
                 matF = 0.995,
                 S_y = 1)
 
-n_obs <- 2
+n_obs <- 4
 data_1d <- get_data(n_sim = n_obs, pars_X0_1d, pars_1d) #Données 1d
 filter_1d <- get_filtering_kalman(pars_X0_1d, pars_1d, data_1d)
 
@@ -79,30 +79,38 @@ ggplot(df) +
                                         sqrt(filter_1d$V_hat[,,2])), color = "red")
 
 
+
 #fonction SIS ------ brouillon
 
-get_SIS <- function(SNIS_X0, u_target, q_proposal, data, m = 1000){
+get_SIS <- function(f, u_target, q_proposal, data, pars_X0, pars, m = 1000){
   
-  W_tilde <- matrix(data = rep(0,m*n_obs), nrow = n_obs)
+  SNIS_X0 <- get_SNIS(f, u_target, q_proposal, 
+                      observation = data$y[1, ], pars_X0, m)
+  traj_mat <- W_tilde <- matrix(data = rep(0, m * n_obs), nrow = n_obs)
   W_tilde[1,] <- SNIS_X0$W_tilde
-  W_tilde_out <- array(data = rep(0, m))
+  traj_mat[1,] <- SNIS_X0$X
+
   
-  for (i in 2:n_obs){ 
-    
-    q_proposal <- 
-    SNIS_i <- get_SNIS(f = function(x) x,
-                       u_proposal = dnorm(x, filter_1d$mu_hat[i], sqrt(filter_1d$V_hat[,,i])),
-                       q_proposal, 
-                       observation = data$y[i, ], m)
-    alpha[i,] <- 
-    W_tilde[i,] <- W_tilde[i-1,] * alpha[i]
-    W_tilde[]
-    
-    
+  for (i in 2:n_obs){
+  
+    for (j in 1:m){ 
+      
+      pars$m_X <- traj_mat[i-1,j]
+      traj_mat[i,j] <- q_proposal$get_samples(1,pars)
+      
+      if(q_proposal$get_density(traj_mat[i,j], pars) == 0) print(i,j)
+      
+      #normalisation
+      W_tilde[i,j] <- W_tilde[i-1,j] * u_target(traj_mat[i,j], data$y[i,], pars) / q_proposal$get_density(traj_mat[i,j], pars)
+      
+      print(u_target(traj_mat[i,j], data$y[i,], pars))
+      
+    }
+    W_tilde[i,] <- W_tilde[i,]/sum(W_tilde[i,])
   }
-  
+  return(list(traj_mat = traj_mat, W_tilde = W_tilde))
 }
 
 
+test <- get_SIS(f = function(x) x, u_target, q_proposal, data_1d, pars_X0_1d, pars_1d, m = 1000)
 
-#Neff_hat <- 1/(sum(SNIS_X0$W_tilde^2))
