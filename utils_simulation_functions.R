@@ -17,34 +17,34 @@ get_mat_sqrt <- function(A){
 
 
 #Fonction génération d'une donnée de n dimensions
-get_simulation <- function(n_sim, pars){
-  x_white_noise <- matrix(rnorm(n_sim * pars$dim_x),
-                          nrow = pars$dim_x,
-                          ncol = n_sim)
-  x <- pars$matF %*% pars$m_x + get_mat_sqrt(pars$S_x) %*% x_white_noise
-  y_white_noise <- matrix(rnorm(n_sim * pars$dim_y),
-                          nrow = pars$dim_y,
-                          ncol = n_sim)
-  y <- pars$A %*% x + pars$b +  get_mat_sqrt(pars$S_y) %*% y_white_noise
-  return(list(x = t(x), y = t(y)))
+
+get_initial_x_y <- function(pars){
+  x <- pars$m0_x + get_mat_sqrt(pars$S_x) %*% rnorm(pars$dim_x)
+  y <- pars$A_y %*% x +  get_mat_sqrt(pars$S_y) %*% rnorm(pars$dim_y)
+  return(list(x = x, y = y))
+}
+get_next_x_y <- function(old_x, pars){
+  x <- pars$F_x %*% old_x + get_mat_sqrt(pars$S_x) %*% rnorm(pars$dim_x)
+  y <- pars$A_y %*% x +  get_mat_sqrt(pars$S_y) %*%  rnorm(pars$dim_y)
+  return(list(x = x, y = y))
 }
 
 
 #Fonction de création des N données
-get_data <- function(n_sim, pars_X0, pars){
-  
-  Data <- get_simulation(1, pars_X0) #Création de la première donnée
-  X_loop <- Data$x #Récupération de la donnée pour l'utiliser en argument de la suivante
-  pars$m_x <- t(X_loop) #Ajout dans les paramètre de la donnée récupérée
-  
-  
-  for (i in 1:(n_sim-1)){ #Boucle de la création des données suivantes
-    
-    append <- get_simulation(1, pars) #Création de la donnée en fonction de la précédente
-    X_loop <- append$x #Récupération de la donnée pour l'utiliser en argument de la suivante
-    pars$m_x <- as.matrix(t(X_loop)) #Ajout dans les paramètre de la donnée récupérée
-    Data <- bind_rows(Data,append) #Enregistrement des valeurs de X et Y dans le Data
+get_data <- function(n_steps, pars){
+  # Initialisation des objets
+  x_states <- matrix(NA, nrow = n_steps, ncol = pars$dim_x)
+  y_obs <- matrix(NA, nrow = n_steps, ncol = pars$dim_y)
+  # Initialisation de la série temporelle
+  xy_init <- get_initial_x_y(pars)
+  x_states[1, ] <- xy_init$x
+  y_obs[1, ] <- xy_init$y
+  # Propagation
+  for (i in 1:(n_steps-1)){ #Boucle de la création des données suivantes
+    xy_next <- get_next_x_y(old_x = x_states[i], pars)
+    x_states[i  + 1, ] <- xy_next$x
+    y_obs[i + 1, ] <- xy_next$y
   }
-  return(Data)
+  return(list(x = x_states, y = y_obs))
 }
 

@@ -1,16 +1,16 @@
-get_filtering_kalman <- function(pars_X0, pars, data){
+get_filtering_kalman <- function(pars, y_obs){
   
   #initialisation du tableau de sortie
-  n <- nrow(data)
+  n <- nrow(y_obs)
   
   mu_hat = matrix(nrow = n, ncol = pars$dim_x)
   V_hat = P_hat = array(dim = c(pars$dim_x, pars$dim_x, n))
   
   #initialisation de l'algorithme pour le premier terme
-  K <- pars_X0$S_x %*% t(pars_X0$A) %*% solve(pars_X0$A %*% pars_X0$S_x %*% t(pars_X0$A) + pars_X0$S_y)
-  mu <- pars_X0$m_x + K %*% (data$y[1,] - pars_X0$A %*% pars_X0$m_x)
-  V <- (diag(pars_X0$dim_x) - K %*% pars_X0$A) %*% pars_X0$S_x
-  Pred_kalm <- pars_X0$matF %*% V %*% t(pars_X0$matF) + pars_X0$S_x
+  K <- pars$S_x %*% t(pars$A_y) %*% solve(pars$A_y %*% pars$S_x %*% t(pars$A_y) + pars$S_y)
+  mu <- pars$m0_x + K %*% (y_obs[1,] - pars$A_y %*% pars$m0_x)
+  V <- (diag(pars$dim_x) - K %*% pars$A_y) %*% pars$S_x
+  Pred_kalm <- pars$F_x %*% V %*% t(pars$F_x) + pars$S_x
   
   mu_hat[1,] <- as.numeric(mu)
   V_hat[,,1] <- V
@@ -18,10 +18,10 @@ get_filtering_kalman <- function(pars_X0, pars, data){
   
   #boucle de l'algorithme
   for (i in 2:n){
-    K <- Pred_kalm %*% t(pars$A) %*% solve(pars$A %*% Pred_kalm %*% t(pars$A) + pars$S_y)
-    mu <- pars$matF %*% mu + K %*% (data$y[i,] - pars$A %*% pars$matF %*% mu)
-    V <- (diag(pars$dim_x) - K %*% pars$A) %*% Pred_kalm
-    Pred_kalm <- pars$matF %*% V %*% t(pars$matF) + pars$S_x
+    K <- Pred_kalm %*% t(pars$A_y) %*% solve(pars$A_y %*% Pred_kalm %*% t(pars$A_y) + pars$S_y)
+    mu <- pars$F_x %*% mu + K %*% (y_obs[i,] - pars$A_y %*% pars$F_x %*% mu)
+    V <- (diag(pars$dim_x) - K %*% pars$A_y) %*% Pred_kalm
+    Pred_kalm <- pars$F_x %*% V %*% t(pars$F_x) + pars$S_x
     
     mu_hat[i,] <- as.numeric(mu)
     V_hat[,,i] <- V
