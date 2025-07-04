@@ -39,8 +39,9 @@ true_model <- list(get_initial_density = function(x, pars){
 get_transition_density = function(x, ancestors, pars){
   # ancestors is either a N vector (if d_X = 1)
   # or  N * d_X matrix
-  x <- as.matrix(x)
-  ancestors <- as.matrix(ancestors)
+  x <- matrix(x, ncol = pars$dim_x)
+  ancestors <- matrix(ancestors, ncol = pars$dim_x)
+  
   sapply(1:nrow(x),
          function(i){
            dmvnorm(x[i, ], as.numeric(pars$F_x %*% ancestors[i, ]), pars$S_x)
@@ -175,14 +176,14 @@ ggplot(SIS_df) +
 
 mean_filtering_weights <- colMeans(SIS$filtering_weights)
 
-plot(mean_filtering_weights)
+#plot(mean_filtering_weights)
 
 get_ESS <- function(W){
   # W is a matrix with T rows (number of time steps) and N columns (number of MC samples)
   apply(W, 1, function(w) 1 / sum(w^2))
 }
 
-apply(SIS$filtering_weights, 1, function(w) 1 / sum(w^2))
+#apply(SIS$filtering_weights, 1, function(w) 1 / sum(w^2))
 
 
 # SIS Resampling -------------------------------------------------------------------------------------------------------------------------------------------------
@@ -197,33 +198,52 @@ get_SIR <- function(target_model, # A list with elements .....
   # - get_x0_knowing_y0
   # - get_xt_knowing_y_xtm1
   
-  SIS <- get_SIS(target_model, 
-                 q_proposal, 
-                 y_obs, 
-                 pars,
-                 n_particles = 100)
+  n_obs <- nrow(y_obs)
+  dim_x <- pars$dim_x
   
-  particles <- SIS$particles
-  filtering_weights <- SIS$filtering_weights
-
-  for (i in 1:n_obs){
-
-      #On sample
-      sample_i <- sample(x = c(1:n_particles), size = n_particles, prob = SIS$filtering_weights[i,], replace = TRUE)
-
-      for (j in 1:n_particles){
-
-        particles[,,j] <- particles[,,sample_i[j]]
-        filtering_weights[,j] <- rep(1/n_particles, n_obs)
-
-      }
-    }
+  # On initialise
+  particles <- array(NA, dim = c(n_particles, dim_x, n_obs))
+  filtering_weights <- matrix(0, nrow = n_obs, ncol = n_particles)
   
-  return(list(particles = particles, filtering_weights = filtering_weights))
+  particles[,,1] <- q_proposal$get_initial_samples(n_particles, pars)
+  w0 <- target_model$get_x0_knowing_y0(particles[,,1], y_obs[1,], pars) /
+    q_proposal$get_initial_density(particles[,,1], pars)
+  filtering_weights[1,] <- w0 / sum(w0)
+  
+  
+  for (i in 2:n_obs) {
+    particles[,,i] <- q_proposal$get_transition_samples(particles[,,i - 1], y_obs[i,], pars)
+    
+    w <- target_model$get_xt_knowing_y_xtm1(particles[,,i], y_obs[i,],
+                                            particles[,,i - 1], pars) /
+      q_proposal$get_transition_density(particles[,,i], y_obs[i,],
+                                        particles[,,i - 1], pars)
+    
+    filtering_weights[i,] <- w / sum(w)
+  }
+  
+  resampled <- lapply(1:n_obs, function(i) {
+    sample_i <- sample(1:n_particles, size = n_particles, 
+                       prob = filtering_weights[i,], replace = TRUE)
+    
+    list(
+      particles = particles[,,sample_i, drop = FALSE],
+      weights = rep(1 / n_particles, n_particles)
+    )
+  })
+  
+  particles_resampled <- array(NA, dim = c(n_particles, dim_x, n_obs))
+  filtering_weights_resampled <- matrix(1 / n_particles, nrow = n_obs, ncol = n_particles)
+  
+  for (i in 1:n_obs) {
+    particles_resampled[,,i] <- resampled[[i]]$particles
+  }
+  
+  return(list(particles = particles_resampled, filtering_weights = filtering_weights_resampled))
 }
 
 
-N_thres <- 10
+
 SIR <- get_SIR(target_model = target_model,
                q_proposal = q_proposal,
                y_obs =  data_1d$y,
