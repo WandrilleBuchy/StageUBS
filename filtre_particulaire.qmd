@@ -1,0 +1,86 @@
+---
+title: "Filtrage particulaire"
+author: "Wandrille Buchy"
+format: html
+editor: visual
+---
+
+# Le modèle
+
+## Ce qu'on sait
+
+Dans notre modèle, les données cachées sont notées ${x_t}$ avec $t \in \mathbb{N}$ représentant les instants temporels successifs et $x_t \in \mathbb{R}^{d_x}$. Les observations que nous avons sont données par les ${y_t}$ pour les mêmes $t$ et avec $y_t \in \mathbb{R}^{d_y}$. Nous avons aussi trois lois différentes :
+
+-   la loi initiale de $X_0$ : $p(x_0)$
+
+-   la loi de transition : $p(x_t \mid x_{t-1})$
+
+-   la loi d'emission : $p(y_t \mid x_t)$
+
+## Ce qu'on cherche
+
+Nous avons trois objectifs principaux :
+
+-   la loi de filtrage jointe : $p(x_{0:n} \mid y_{0:n})$
+
+-   la loi de filtrage : $p(x_t \mid y_{0:n})$
+
+-   l'intégrale : $I(f_n) = \int f_n(x_{0:n})p(x_{0:n} \mid y_{0:n})dx_{0:n}$
+
+## Etude du cas $n = 0$
+
+Prenons tout d'abord $p(x_0 \mid y_0)$ avec la définition de la densité conditionnelle.
+
+$$
+p(x_0 \mid y_0) = \frac{p(y_0,x_0)}{p(y_0)} \Leftrightarrow p(y_0)p(x_0 \mid y_0) = p(y_0,x_0) = p(x_0)p(y_0\mid x_0) 
+$$
+
+donc
+
+$$
+p(x_0 \mid y_0) = \frac{p(x_0)p(y_0\mid x_0)}{p(y_0)}
+$$
+
+Or, par la définition de la loi marginale,
+
+$$
+p(y_0) = \int_{\mathbb{R}^{d_x}}p(x_0)p(y_0\mid x_0)dx_0
+$$
+
+donc nous pouvons en déduire que
+
+$$
+p(x_0 \mid y_0) = \frac{p(x_0)p(y_0\mid x_0)}{\int_{\mathbb{R}^{d_x}}p(x_0)p(y_0\mid x_0)dx_0}
+$$
+
+Un deuxième objectif était l'estimation de $I(f_0)$. Ce qui se traduit par :
+
+$$
+I(f_0) = \int_{\mathbb{R}^{d_x}}f(x_0)p(x_0\mid y_0)dx_0 = \int_{\mathbb{R}^{d_x}}f(x_0)\frac{p(x_0)p(y_0\mid x_0)}{\int_{\mathbb{R}^{d_x}}p(x_0)p(y_0\mid x_0)dx_0}dx_0 = \frac{1}{\int_{\mathbb{R}^{d_x}}p(x_0)p(y_0\mid x_0)dx_0}\int_{\mathbb{R}^{d_x}}f(x_0){p(x_0)p(y_0\mid x_0)}dx_0
+$$
+
+Or, dans le cas général, ces intégrales ne sont pas tout le temps explicites, nous allons donc en faire une estimation avec la méthode de Monte-Carlo. Pour cela, il est nécessaire, ici, de pouvoir simuler des données selon la loi $x_0$ ; or n'est pas toujours possible non plus. Pour y pallier, nous allons utiliser le *Self Normalized Importance Sampling* ou *SNIS.*
+
+Pour $\int_{\mathbb{R}^{d_x}}f(x_0){p(x_0)p(y_0\mid x_0)}dx_0$ , nous choisissons un $q(x_0)$ que nous sommes en capacité de simuler et qui satisfait $\forall z, p(y_0\mid z) p(z) > 0 \Rightarrow q(z) > 0$ puis nous l'injectons
+
+$$
+\int_{\mathbb{R}^{d_x}}f(z)\frac{p(z)p(y_0\mid z)}{q(z)}q(z)dz = \mathbb{E}_q(f(Z)\frac{p(Z)p(y_0\mid Z)}{q(z)})
+$$
+
+l'expression de $I(f_0)$, il vient:
+
+$$
+I(f_0) = \frac {1}{\mathbb{E}_q(\frac{p(Z)p(y_0 \mid Z)}{q(Z)})}\mathbb{E}_q(f(Z)\frac{p(Z)p(y_0 \mid Z)}{q(Z)})
+$$
+
+Ce qui donne l'estimateur de Monte-Carlo pour $m \in \mathbb{N}^*$ l'effort de Monte-Carlo:
+
+$$
+\hat{I}_m^{SNIS}(f_0)_{0 \mid 0} = \frac {1}{\displaystyle \sum_{i = 1}^m(\frac{p(Z_i)p(y_0 \mid Z_i)}{q(Z_i)})}\displaystyle \sum_{j = 1}^m(f(Z_j)\frac{p(Z_j)p(y_0 \mid Z_j)}{q(Z_j)})
+$$
+
+Si l'on pose, $\omega(Z_i) = \frac{p(Zi)p(y_0 \mid Z_i)}{q(Z_i)}$ les poids des tirages $Z_i \overset{\text{iid}}{\sim} q(.)$, on obtient $\mathbb{E}_q(f_0(Z)\omega(Z))$. En injectant dans l'estimateur cela donne
+
+$$
+\hat{I}_m^{SNIS}(f_0)_{0 \mid 0} = \frac{1}{\displaystyle\sum_{i=1}^m \omega(Z_i)}\sum_{j=1}^m f(Z_j) \omega(Z_j)
+$$
