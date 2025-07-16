@@ -20,12 +20,12 @@ get_mat_sqrt <- function(A){
 
 get_initial_x_y <- function(pars){
   x <- pars$m0_x + get_mat_sqrt(pars$S_x) %*% rnorm(pars$dim_x)
-  y <- pars$A_y %*% x +  get_mat_sqrt(pars$S_y) %*% rnorm(pars$dim_y)
+  y <- pars$A_y %*% x + get_mat_sqrt(pars$S_y) %*% rnorm(pars$dim_y)
   return(list(x = x, y = y))
 }
 get_next_x_y <- function(old_x, pars){
   x <- pars$F_x %*% old_x + get_mat_sqrt(pars$S_x) %*% rnorm(pars$dim_x)
-  y <- pars$A_y %*% x +  get_mat_sqrt(pars$S_y) %*%  rnorm(pars$dim_y)
+  y <- pars$A_y %*% x + get_mat_sqrt(pars$S_y) %*% rnorm(pars$dim_y)
   return(list(x = x, y = y))
 }
 

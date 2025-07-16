@@ -1,6 +1,6 @@
-source("D:/Users/buchy/Documents/Stage/utils_simulation_functions.R")
-source("D:/Users/buchy/Documents/Stage/utils_kalman_functions.R")
-source("D:/Users/buchy/Documents/Stage/code_filtrage_particulaire.R")
+source("utils_simulation_functions.R")
+source("utils_kalman_functions.R")
+source("code_filtrage_particulaire.R")
 
 ## ----SNIS-------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -16,8 +16,9 @@ get_SNIS <- function(f, u_target, q_proposal, observation, pars, m = 100){
 #Densite non normalisee
 
 SNIS_X0 <- get_SNIS(f = function(x) x,
-                    u_target,
-                    observation = data_1d$y[1, ],
+                    u_target = target_model$get_x0_knowing_y0,
+                    q_proposal = q_proposal,
+                    observation = sim_data$y[1, ],
                     pars = full_pars_list,
                     m = 100)
 

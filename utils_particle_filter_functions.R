@@ -1,8 +1,10 @@
 
 
-get_ESS <- function(W){
+
+
+get_ESS <- function(w){
   # W is a matrix with T rows (number of time steps) and N columns (number of MC samples)
-  apply(W, 1, function(w) 1 / sum(w^2))
+  apply(w, 1, function(w) 1 / sum(w^2))
 }
 
 
@@ -27,20 +29,22 @@ get_SIR <- function(target_model, # A list with elements .....
   
   # On initialise
   particles <- array(NA, dim = c(n_particles, dim_x, n_obs))
-  filtering_weights <- matrix(0, nrow = n_obs, ncol = n_particles)
+  unnormed_log_filtering_weights <- filtering_weights <- matrix(0, nrow = n_obs, ncol = n_particles)
   
   particles[,,1] <- q_proposal$get_initial_samples(n_particles, pars)
-  w0 <- target_model$get_x0_knowing_y0(particles[,,1], y_obs[1,], pars) /
-    q_proposal$get_initial_density(particles[,,1], pars)
-  filtering_weights[1,] <- w0 / sum(w0)
-  
-  
+  log_w0 <- log(target_model$get_x0_knowing_y0(particles[,,1], y_obs[1,], pars)) -
+    log(q_proposal$get_initial_density(particles[,,1], pars))
+  log_sum_unnormed_w <- max(log_w0) + log(sum(exp(log_w0 - max(log_w0)))) # log_sum_exp_trick
+  unnormed_log_filtering_weights[1,] <- log_w0
+  filtering_weights[1,] <- exp(unnormed_log_filtering_weights[1, ] - log_sum_unnormed_w)
+  log_likelihood <- log_sum_unnormed_w - log(n_particles)
+  old_log_sum_unnormed_w <- log_sum_unnormed_w
   for (i in 2:n_obs) {
-    old_weights <- filtering_weights[i - 1, ]
-    current_ESS <-  1 / sum(old_weights^2)
+    log_old_weights <- unnormed_log_filtering_weights[i - 1, ]
+    current_ESS <-  1 / sum(filtering_weights[i - 1, ]^2)
     ancestor_indexes <- 1:n_particles
     if(current_ESS <= threshold){
-      old_weights <- rep(1, n_particles) 
+      log_old_weights <- rep(0, n_particles) 
       ancestor_indexes <- sample(1:n_particles,
                                  size = n_particles,
                                  replace = TRUE,
@@ -50,14 +54,27 @@ get_SIR <- function(target_model, # A list with elements .....
                                                         y_obs[i,], 
                                                         pars)
     
-    w <- old_weights * target_model$get_xt_knowing_y_xtm1(x = particles[,,i], y = y_obs[i,],
-                                                          ancestors = particles[ancestor_indexes,,i - 1], pars) /
-      q_proposal$get_transition_density(x = particles[,,i], 
-                                        y = y_obs[i,],
-                                        ancestors = particles[ancestor_indexes,,i - 1], pars)
-    
-    filtering_weights[i,] <- w / sum(w)
+    log_w <- log_old_weights + 
+      log(target_model$get_xt_knowing_y_xtm1(x = particles[,,i], y = y_obs[i,],
+                                             ancestors = particles[ancestor_indexes,,i - 1], pars)) -
+      log(q_proposal$get_transition_density(x = particles[,,i], 
+                                            y = y_obs[i,],
+                                            ancestors = particles[ancestor_indexes,,i - 1], pars))
+    log_sum_unnormed_w <- max(log_w) + log(sum(exp(log_w - max(log_w)))) # Log sum exp trick
+    unnormed_log_filtering_weights[i, ] <- log_w
+    filtering_weights[i,] <- exp(unnormed_log_filtering_weights[i, ] - log_sum_unnormed_w)
+    log_likelihood <- log_likelihood + log_sum_unnormed_w - 
+      ifelse(current_ESS <= threshold, 
+             log(n_particles),
+             old_log_sum_unnormed_w)
+    print(log_sum_unnormed_w - 
+            ifelse(current_ESS <= threshold, 
+                   log(n_particles),
+                   old_log_sum_unnormed_w))
+    old_log_sum_unnormed_w <- log_sum_unnormed_w
   }
   
-  return(list(particles = particles, filtering_weights =  filtering_weights))
+  return(list(particles = particles, filtering_weights =  filtering_weights,
+              log_likelihood = log_likelihood))
 }
+
