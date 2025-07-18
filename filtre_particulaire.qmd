@@ -267,7 +267,7 @@ Pour finir, nous enregistrons la somme des log-poids non normés pour pouvoir le
               log_likelihood = log_likelihood))
 ```
 
-Cette fonction retourne les particules, leur poids normé et la log-vraisemblance des particules données.
+Cette fonction retourne les particules, leur poids normé et la log-vraisemblance de la suite des observations $y_{0:n}$.
 
 Mis bout à bout le code est le suivant :
 
@@ -346,3 +346,5 @@ get_SIR <- function(target_model, # A list with elements .....
               log_likelihood = log_likelihood))
 }
 ```
+
+Nous pouvons aussi comparer avec les résultats d'un filtre de Kalman dans le cas d'un modèle linéaire Gaussien pour verifier sa validité en particulier grâce à la log-vraisemblance calculée grâce à la fonction.
