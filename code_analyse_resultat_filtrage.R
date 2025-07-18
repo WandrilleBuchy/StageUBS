@@ -11,7 +11,7 @@ if(!file.exists("results_particle_filter.rds")){
 
 all_results <- readRDS("results_particle_filter.rds")
 kalman_result <- get_filtering_kalman(pars = full_pars_list, y_obs = sim_data$y)
-kalman_df <- data.frame(t = 0:(nrow(sim_data$y) - 1),
+kalman_df <- data.frame(t = 1:nrow(sim_data$y),
                         x = kalman_result$mu_hat[,1],
                         IC_low = kalman_result$mu_hat[,1] - 1.96 * sqrt(kalman_result$V_hat[1, 1, ]),
                         IC_sup = kalman_result$mu_hat[,1] + 1.96 * sqrt(kalman_result$V_hat[1, 1, ]))

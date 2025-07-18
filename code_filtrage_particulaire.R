@@ -47,7 +47,7 @@ target_model <- list(get_x0_knowing_y0 = function(x, y, pars){
              true_model$get_emission_density(x = x[i, ], y = y, pars = pars)
            })
   }, 
-  get_xt_knowing_y_xtm1 = function(x, y, ancestors, pars){
+  get_xt_knowing_y_xtm1 = function(x, y, ancestors, pars){ #p(y_t|x_t)p(x_t|x_t-1)
   x <- as.matrix(x) # N * d_X
   ancestors <- as.matrix(ancestors)
   # y is single observation
@@ -79,8 +79,8 @@ q_proposal <- list(get_initial_density = true_model$get_initial_density,
 
 # Performing particle filter ----------------------------------------------
 
-n_particles = 500
-n_replicates = 100 # Nombre de réplicats des estimateurs
+n_particles = 50
+n_replicates = 500 # Nombre de réplicats des estimateurs
 methods <- list(SIS = list(threshold = 0),
                 SIR = list(threshold = n_particles + 1),
                 SIR_bis = list(threshold = n_particles / 2 ))

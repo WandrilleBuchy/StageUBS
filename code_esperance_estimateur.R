@@ -1,6 +1,6 @@
-source("D:/Users/buchy/Documents/Stage/utils_simulation_functions.R")
-source("D:/Users/buchy/Documents/Stage/utils_kalman_functions.R")
-source("D:/Users/buchy/Documents/Stage/code_filtrage_particulaire.R")
+source("utils_simulation_functions.R")
+source("utils_kalman_functions.R")
+source("code_filtrage_particulaire.R")
 
 # Loi cible, vraie loi de X_0 | Y_0
 objectif <- function(x) return(dnorm(x, filter_1d$mu_hat[1,], sqrt(filter_1d$V_hat[1])))

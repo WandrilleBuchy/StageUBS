@@ -12,6 +12,6 @@ full_pars_list <- list(dim_x = 1,
                        A_y = as.matrix(1), # must be a matrix...
                        S_y = as.matrix(1))
 
-n_obs <- 100
-set.seed(123)
+n_obs <- 10
+set.seed(1234)
 sim_data <- get_data(n_steps = n_obs, full_pars_list) #Données 1d
