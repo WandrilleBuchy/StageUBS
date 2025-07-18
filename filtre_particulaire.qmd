@@ -27,7 +27,7 @@ Nous avons trois objectifs principaux :
 
 -   l'intégrale : $I(f_n) = \int f_n(x_{0:n})p(x_{0:n} \mid y_{0:n})dx_{0:n}$
 
-## Etude du cas $n = 0$
+## Etude du cas $n = 0$ pour la méthode SIS
 
 Prenons tout d'abord $p(x_0 \mid y_0)$ avec la définition de la densité conditionnelle.
 
@@ -82,5 +82,31 @@ $$
 Si l'on pose, $\omega(Z_i) = \frac{p(Zi)p(y_0 \mid Z_i)}{q(Z_i)}$ les poids des tirages $Z_i \overset{\text{iid}}{\sim} q(.)$, on obtient $\mathbb{E}_q(f_0(Z)\omega(Z))$. En injectant dans l'estimateur cela donne
 
 $$
-\hat{I}_m^{SNIS}(f_0)_{0 \mid 0} = \frac{1}{\displaystyle\sum_{i=1}^m \omega(Z_i)}\sum_{j=1}^m f(Z_j) \omega(Z_j)
+\hat{I}_m^{SNIS}(f_0)_{0 \mid 0} = \frac{1}{\displaystyle\sum_{i=1}^m \omega(Z_i)}\sum_{j=1}^m f(Z_j) \omega(Z_j) = \sum_{i=1}^m\tilde{\omega}(Z_i)f(Z_i)
 $$
+
+Nous obtenons ainsi un estimateur de Monte-Carlo pour l'intégrale. Il se trouve être biaisé mais nous avons $\hat{I}_m^{SNIS} \xrightarrow[m \to + \infty]{\mathbb{P}} I$ ce qui nous permet d'en déduire que le biais et la variance tendent vers $0$. De plus, cet estimateur admet le *TCL*.
+
+## Méthode SIR
+
+La méthode SIR pour *Self normalized Importance Resampling* intervient pour pallier aux limites du modèle SIS. En effet, la méthode SIS est, dans sa construction, une méthode pour pseudo-simuler une loi continue avec un tirage à support discret. Ce faisant, le tirage des points n'est que pseudo simulé que grâce aux poids qui permettent le lien entre la loi connue celle que nous ne savons pas simuler. Or, il arrive souvent le cas, où, très peu de points (\~1) contiennent l'information, c'est à dire que le poids de ce point est très gros par rapport aux autres et est donc en résumé le seul qui compte. Cela donne une dégénérescence de l'estimateur de l'integrale souhaité. L'objectif du SIR est de resampler pour chaque valeurs du temps $t$ en tirant parmis les $m$ particules simulées selon la loi de $q$ avec pour chacune une probabilité de tirage $\omega _{t}^{(i)}$ le poids de la $i$-ème particule du temps $t$.
+
+Il y a trois variantes principales de cet algorithme qui peuvent être codés dans une seule fonction :
+
+-   La méthode où le resampling est toujours fait
+
+-   La méthode où le resampling n'est fait que sous certaines conditions. Celles-ci étant souvent une répartition trop inégale
+
+-   La méthode où le resampling n'est jamais fait; c'est la méthode SIS précédente
+
+Pour comprendre comment effectuer la deuxième méthode il faut comprendre le principe d'*Effective Sampling Size* qui permet de rendre compte de l'équilibre des poids pour une génération de particules. La formule est la suivante :
+
+$$
+ESS(t) = \frac{1}{\displaystyle\sum^m_{i=1}(\omega_t^{(i)})^2}
+$$
+
+Cette statistique nous donnera une valeur entre 1 et $m$. Si cette valeur est proche de 1 alors la répartition des poids n'est que peu équilibrée et à contrario plus elle se rapproche de $m$, plus elle est équilibrée. Nous cherchons donc à obtenir une valeur la plus proche de $m$ possible.
+
+Ainsi la deuxième méthode se différencie par l'étude pour chaque $t$ de la comparaison entre $ESS(t)$ et une valeur limite appellée $threshold$. Si la valeur de $ESS(t) > threshold$ alors on ne rééchantillonne pas sinon on rééchantillonne.
+
+## L'algorithme
