@@ -1,7 +1,7 @@
 ---
-title: "Filtrage particulaire"
+title: "Etude du filtrage particulaire"
 author: "Wandrille Buchy"
-format: html
+format: pdf
 editor: visual
 ---
 
@@ -9,7 +9,7 @@ editor: visual
 
 ## Ce qu'on sait
 
-Dans notre modèle, les données cachées sont notées ${x_t}$ avec $t \in \mathbb{N}$ représentant les instants temporels successifs et $x_t \in \mathbb{R}^{d_x}$. Les observations que nous avons sont données par les ${y_t}$ pour les mêmes $t$ et avec $y_t \in \mathbb{R}^{d_y}$. Nous avons aussi trois lois différentes :
+Dans notre modèle, les données cachées sont notées ${x_t}$ avec $t \in \mathbb{N}$ représentant les instants temporels successifs et nous savons que $x_t \in \mathbb{R}^{d_x}$. Les observations que nous avons sont données par les ${y_t}$ pour les mêmes $t$ et avec $y_t \in \mathbb{R}^{d_y}$. Nous avons aussi trois lois différentes :
 
 -   la loi initiale de $X_0$ : $p(x_0)$
 
@@ -21,15 +21,17 @@ Dans notre modèle, les données cachées sont notées ${x_t}$ avec $t \in \math
 
 Nous avons trois objectifs principaux :
 
--   la loi de filtrage jointe : $p(x_{0:n} \mid y_{0:n})$
+-   la loi de lissage : $p(x_{0:n} \mid y_{0:n})$
 
--   la loi de filtrage : $p(x_t \mid y_{0:n})$
+-   la loi de filtrage : $p(x_t \mid y_{0:t})$ $\forall t$
 
--   l'intégrale : $I(f_n) = \int f_n(x_{0:n})p(x_{0:n} \mid y_{0:n})dx_{0:n}$
+-   l'intégrale : $I_n(f) = \int f(x_{0:n})p(x_{0:n} \mid y_{0:n})dx_{0:n} = \mathbb{E}_{p(.\mid y_{0:n})}(f)$
 
-## Etude du cas $n = 0$ pour la méthode SIS
+Nous nous pencherons ici sur la loi de lissage et sur l'estimation de l'intégrale.
 
-Prenons tout d'abord $p(x_0 \mid y_0)$ avec la définition de la densité conditionnelle.
+## Approximation de la loi de filtrage par Importance Sampling
+
+Etudions le cas $t=0$ donc $p(x_0 \mid y_0)$. La définition de la densité conditionnelle nous donne
 
 $$
 p(x_0 \mid y_0) = \frac{p(y_0,x_0)}{p(y_0)} \Leftrightarrow p(y_0)p(x_0 \mid y_0) = p(y_0,x_0) = p(x_0)p(y_0\mid x_0) 
@@ -53,13 +55,13 @@ $$
 p(x_0 \mid y_0) = \frac{p(x_0)p(y_0\mid x_0)}{\int_{\mathbb{R}^{d_x}}p(x_0)p(y_0\mid x_0)dx_0}
 $$
 
-Un deuxième objectif était l'estimation de $I(f_0)$. Ce qui se traduit par :
+Un deuxième objectif était l'estimation de $I_0(f)$. Ce qui se traduit par :
 
 $$
-I(f_0) = \int_{\mathbb{R}^{d_x}}f(x_0)p(x_0\mid y_0)dx_0 = \int_{\mathbb{R}^{d_x}}f(x_0)\frac{p(x_0)p(y_0\mid x_0)}{\int_{\mathbb{R}^{d_x}}p(x_0)p(y_0\mid x_0)dx_0}dx_0 = \frac{1}{\int_{\mathbb{R}^{d_x}}p(x_0)p(y_0\mid x_0)dx_0}\int_{\mathbb{R}^{d_x}}f(x_0){p(x_0)p(y_0\mid x_0)}dx_0
+\begin{aligned}I_0(f) &= \int_{\mathbb{R}^{d_x}} f(x_0) p(x_0 \mid y_0)\, dx_0 \\ &= \int_{\mathbb{R}^{d_x}} f(x_0) \frac{p(x_0)p(y_0 \mid x_0)}{\int_{\mathbb{R}^{d_x}} p(x_0)p(y_0 \mid x_0)\, dx_0} dx_0 \\ &= \frac{1}{\int_{\mathbb{R}^{d_x}} p(x_0)p(y_0 \mid x_0)\, dx_0}\int_{\mathbb{R}^{d_x}} f(x_0)p(x_0)p(y_0 \mid x_0)\, dx_0\end{aligned}
 $$
 
-Or, dans le cas général, ces intégrales ne sont pas tout le temps explicites, nous allons donc en faire une estimation avec la méthode de Monte-Carlo. Pour cela, il est nécessaire, ici, de pouvoir simuler des données selon la loi $x_0$ ; or n'est pas toujours possible non plus. Pour y pallier, nous allons utiliser le *Self Normalized Importance Sampling* ou *SNIS.*
+Or, dans le cas général, ces intégrales ne sont pas explicites, nous allons donc en faire une estimation avec la méthode de Monte-Carlo. Pour cela, il est nécessaire, ici, de pouvoir simuler des données selon la loi $x_0$ ; or n'est pas toujours possible non plus. Pour y pallier, nous allons utiliser le *Self Normalized Importance Sampling* ou *SNIS.*
 
 Pour $\int_{\mathbb{R}^{d_x}}f(x_0){p(x_0)p(y_0\mid x_0)}dx_0$ , nous choisissons un $q(x_0)$ que nous sommes en capacité de simuler et qui satisfait $\forall z, p(y_0\mid z) p(z) > 0 \Rightarrow q(z) > 0$ puis nous l'injectons
 
@@ -67,37 +69,47 @@ $$
 \int_{\mathbb{R}^{d_x}}f(z)\frac{p(z)p(y_0\mid z)}{q(z)}q(z)dz = \mathbb{E}_q(f(Z)\frac{p(Z)p(y_0\mid Z)}{q(z)})
 $$
 
-l'expression de $I(f_0)$, il vient:
+l'expression de $I_0(f)$, il vient:
 
 $$
-I(f_0) = \frac {1}{\mathbb{E}_q(\frac{p(Z)p(y_0 \mid Z)}{q(Z)})}\mathbb{E}_q(f(Z)\frac{p(Z)p(y_0 \mid Z)}{q(Z)})
+I_0(f) = \frac {1}{\mathbb{E}_q(\frac{p(Z)p(y_0 \mid Z)}{q(Z)})}\mathbb{E}_q(f(Z)\frac{p(Z)p(y_0 \mid Z)}{q(Z)})
 $$
 
 Ce qui donne l'estimateur de Monte-Carlo pour $m \in \mathbb{N}^*$ l'effort de Monte-Carlo:
 
 $$
-\hat{I}_m^{SNIS}(f_0)_{0 \mid 0} = \frac {1}{\displaystyle \sum_{i = 1}^m(\frac{p(Z_i)p(y_0 \mid Z_i)}{q(Z_i)})}\displaystyle \sum_{j = 1}^m(f(Z_j)\frac{p(Z_j)p(y_0 \mid Z_j)}{q(Z_j)})
+\hat{I}_m^{SNIS}(f)_{0 \mid 0} = \frac {1}{\displaystyle \sum_{i = 1}^m(\frac{p(Z_i)p(y_0 \mid Z_i)}{q(Z_i)})}\displaystyle \sum_{j = 1}^m(f(Z_j)\frac{p(Z_j)p(y_0 \mid Z_j)}{q(Z_j)})
 $$
 
-Si l'on pose, $\omega(Z_i) = \frac{p(Zi)p(y_0 \mid Z_i)}{q(Z_i)}$ les poids des tirages $Z_i \overset{\text{iid}}{\sim} q(.)$, on obtient $\mathbb{E}_q(f_0(Z)\omega(Z))$. En injectant dans l'estimateur cela donne
+Si l'on pose, $\omega(Z_i) = \frac{p(Zi)p(y_0 \mid Z_i)}{q(Z_i)}$ les poids des tirages $Z_i \overset{\text{iid}}{\sim} q(.)$, on obtient $\mathbb{E}_q(f_0(Z)\omega(Z))$ et $\tilde{\omega}(Z_j) = \frac{\omega(Z_j)}{\displaystyle \sum^m_{i=1}\omega(Z_i)}$ le poids orthonormalisé, on obtient
 
 $$
-\hat{I}_m^{SNIS}(f_0)_{0 \mid 0} = \frac{1}{\displaystyle\sum_{i=1}^m \omega(Z_i)}\sum_{j=1}^m f(Z_j) \omega(Z_j) = \sum_{i=1}^m\tilde{\omega}(Z_i)f(Z_i)
+\hat{I}_m^{SNIS}(f)_{0 \mid 0} = \frac{1}{\displaystyle\sum_{i=1}^m \omega(Z_i)}\sum_{j=1}^m f(Z_j) \omega(Z_j) = \sum_{j=1}^m\tilde{\omega}(Z_j)f(Z_j)
 $$
 
 Nous obtenons ainsi un estimateur de Monte-Carlo pour l'intégrale. Il se trouve être biaisé mais nous avons $\hat{I}_m^{SNIS} \xrightarrow[m \to + \infty]{\mathbb{P}} I$ ce qui nous permet d'en déduire que le biais et la variance tendent vers $0$. De plus, cet estimateur admet le *TCL*.
 
-## Méthode SIR
+## Calcul de l'estimation par la méthode Sequential Importance Sampling
 
-La méthode SIR pour *Self normalized Importance Resampling* intervient pour pallier aux limites du modèle SIS. En effet, la méthode SIS est, dans sa construction, une méthode pour pseudo-simuler une loi continue avec un tirage à support discret. Ce faisant, le tirage des points n'est que pseudo simulé que grâce aux poids qui permettent le lien entre la loi connue celle que nous ne savons pas simuler. Or, il arrive souvent le cas, où, très peu de points (\~1) contiennent l'information, c'est à dire que le poids de ce point est très gros par rapport aux autres et est donc en résumé le seul qui compte. Cela donne une dégénérescence de l'estimateur de l'integrale souhaité. L'objectif du SIR est de resampler pour chaque valeurs du temps $t$ en tirant parmis les $m$ particules simulées selon la loi de $q$ avec pour chacune une probabilité de tirage $\omega _{t}^{(i)}$ le poids de la $i$-ème particule au temps $t$.
+La méthode SIS pour Sequential Importance Sampling est la première méthode qu'il est possible de choisir pour calculer estimation précédente. Elle consiste simplement en la simulation des particules tirées selon la loi $Z_i \overset{\text{iid}}{\sim} q(.)$ puis en la mise à jour des poids comme tel :
+
+$$
+\tilde{\omega}^{(i)}_t = \omega^{(i)}_{t-1}\frac{p(y_t \mid x_t^{(i)})p(x^{(i)}_t\mid x^{(i)}_{t-1})}{q(x^{(i)}_t\mid x^{(i)}_{t-1})}
+$$
+
+Il suffit ensuite suivre la formule de l'estimateur de Monte-Carlo pour obtenir la valeur des estimateurs voulus.
+
+## Calcul de l'estimation par la méthode Sequential Importance Resampling et implémentation des méthodes
+
+La méthode SIR pour *Sequential Importance Resampling* intervient pour pallier aux limites du modèle SIS. En effet, la méthode SIS est, dans sa construction, une méthode pour pseudo-simuler une loi continue avec un tirage à support discret. Ce faisant, le tirage des points n'est que pseudo-simulé que grâce aux poids qui permettent le lien entre la loi connue celle que nous ne savons pas simuler. Or, il arrive souvent le cas, où, très peu de points (\~ 1) contiennent l'information, c'est à dire que les poids de ces points sont très gros par rapport aux autres et sont donc en résumé les seuls qui comptent. Cela donne une dégénérescence de l'estimateur de l'intégrale souhaitée. L'objectif du SIR est de resampler pour chaque valeurs du temps $t$ en tirant parmis les $m$ particules simulées selon la loi de $q$ avec pour chacune une probabilité de tirage $\tilde{\omega} _{t}^{(i)}$ le poids de la $i$-ème particule au temps $t$.
 
 Il y a trois variantes principales de cet algorithme qui peuvent être codés dans une seule fonction :
 
--   La méthode où le resampling est toujours fait
+-   La méthode où le resampling est toujours fait ; méthode SIR
 
--   La méthode où le resampling n'est fait que sous certaines conditions. Celles-ci étant souvent une répartition trop inégale
+-   La méthode où le resampling n'est fait que sous certaines conditions. Celles-ci étant souvent une répartition trop inégale ; méthode SIR_alternative
 
--   La méthode où le resampling n'est jamais fait; c'est la méthode SIS précédente
+-   La méthode où le resampling n'est jamais fait ; méthode SIS
 
 Pour comprendre comment effectuer la deuxième méthode il faut comprendre le principe d'*Effective Sampling Size* qui permet de rendre compte de l'équilibre des poids pour une génération de particules. La formule est la suivante :
 
@@ -107,15 +119,15 @@ $$
 
 Cette statistique nous donnera une valeur entre $1$ et $m$. Si cette valeur est proche de $1$ alors la répartition des poids n'est que peu équilibrée et à contrario plus elle se rapproche de $m$, plus elle est équilibrée. Nous cherchons donc à obtenir une valeur la plus proche de $m$ possible.
 
-Ainsi la deuxième méthode se différencie par l'étude pour chaque $t$ de la comparaison entre $ESS(t)$ et une valeur limite appellée $threshold$. Si la valeur de $ESS(t) > threshold$ alors on ne rééchantillonne pas sinon on rééchantillonne.
+Ainsi la deuxième méthode se différencie par l'étude pour chaque $t$ de la comparaison entre $ESS(t)$ et une valeur limite appelée $threshold$. Si la valeur de $ESS(t) > threshold$ alors on ne rééchantillonne pas sinon on rééchantillonne.
 
 ## L'algorithme
 
-Afin, de pouvoir utiliser simplement l'algorithme dans n'importe quel modèle nous composons une fonction qui permet le calcul des différents estimateurs $\hat{I}_m^{SNIS}$, $\hat{I}_m^{SIR}$ et $\hat{I}_m^{SIR\_bis}$ selon le $threshold$ donné. Elle permet aussi de récuperer la log-vraisemblance ce qui peut-être utile.
+Afin, de pouvoir utiliser simplement l'algorithme dans n'importe quel modèle nous composons une fonction qui permet le calcul des différents estimateurs $\hat{I}_m^{SNIS}$, $\hat{I}_m^{SIR}$ et $\hat{I}_m^{SIR\_bis}$ selon le $threshold$ donné. Elle permet aussi de récuperer la log-vraisemblance ce qui nous seras utile ensuite.
 
 Nous allons expliquer le code partie par partie.
 
-``` R
+``` r
 get_SIR <- function(target_model, # A list with elements ..... 
                     q_proposal,  # A list with elements ....
                     y_obs, # A matrix of size n_obs * dim_y
@@ -144,13 +156,13 @@ Il s'agit donc de la fonction `get_SIR`qui prend en arguments *target_model*, *q
 
 -   *y_obs* : les observations dont nous disposons donc une liste de vecteurs de dimension *dim_y*
 
--   *pars* : les paramètres des différentes densités et méthodes de sampling
+-   *pars* : les paramètres des différentes densités et des méthodes de sampling
 
 -   *n_particles* : par défaut égal à $100$, il s'agit du nombre de particules à simuler pour l'estimateur, il est l'*effort de Monte-Carlo* ou $m$ dans la partie théorique plus haute
 
--   *threshold* : le réel qui sera comparé à la valeur de l'ESS pour tout les instants temporels. Si non renseigné il est défini par défaut sans valeur (`NULL`) ce qui provoquera le rééchantillonage automatique; il s'agit de la méthode *SIR*. Si il est entre $0$ et $1$, alors la fonction ne rééchantillonne pas; il s'agit de la méthode *SIS*. S'il s'agit d'une valeur entre $1$ et *n_particles*, le rééchantillonage dépendra de la valeur de l'ESS; c'est la méthode *SIR_bis*
+-   *threshold* : le réel qui sera comparé à la valeur de l'ESS pour tout les instants temporels. Si non renseigné, il est défini par défaut sans valeur (`NULL`) ce qui provoquera le rééchantillonage automatique; il s'agit de la méthode *SIR*. Si il est entre $0$ et $1$, alors la fonction ne rééchantillonne pas; il s'agit de la méthode *SIS*. S'il s'agit d'une valeur entre $1$ et *n_particles*, le rééchantillonage dépendra de la valeur de l'ESS; c'est la méthode *SIR_bis*
 
-``` R
+``` r
 if(is.null(threshold)){ # Always resample
     threshold = n_particles + 1
   }
@@ -158,111 +170,149 @@ if(is.null(threshold)){ # Always resample
 
 Comme dit précédemment, le cas *threshold* non renseigné donc `threshold = NULL` est le cas où nous rééchantillonnons tout le temps. Pour faire en sorte que cela marche, nous fixons une valeur qui majore strictement $ESS(t)$ $\forall t \in \mathbb{N}$ c'est-à-dire `n_particles + 1` car $ESS(t) \leq n\_particles$ $\forall t \in \mathbb{N}$.
 
-``` R
+``` r
 # initialization
   n_obs <- nrow(y_obs)
   dim_x <- pars$dim_x
 
-  particles <- array(NA, dim = c(n_particles, dim_x, n_obs)) # 3 dim matrix
-  unnormed_log_filtering_weights <- filtering_weights <- matrix(0, nrow = n_obs, ncol = n_particles) # n_obs * n_particles matrices
+  particles <- array(NA, dim = c(n_particles,
+                                 dim_x,
+                                 n_obs)) # 3 dim matrix
+  unnormed_log_filtering_weights <- filtering_weights <- matrix(0,
+                                                                nrow = n_obs,
+                                                                ncol = n_particles)
+  # n_obs * n_particles matrices
 ```
 
 Nous initialisons les constantes principales pour simplifier le code puis nous créons les objets que nous allons utiliser pour la suite.
 
-``` R
-  particles[,,1] <- q_proposal$get_initial_samples(n_particles, pars) # get n_particles initials samples cf n_particles x_0
+``` r
+  particles[,,1] <- q_proposal$get_initial_samples(n_particles, pars)
+  # get n_particles initials samples cf n_particles x_0
   
   log_w0 <- log(target_model$get_x0_knowing_y0(particles[,,1], y_obs[1,], pars)) -
-    log(q_proposal$get_initial_density(particles[,,1], pars)) # get the initials log weights for the n_particles x_0 ------- the log is needed to process the log likelihood
+    log(q_proposal$get_initial_density(particles[,,1], pars)) 
+  # get the initials log weights for the n_particles x_0 
+  # because the log is needed to process the log likelihood
 ```
 
-Nous commençons par l'initialisation de l'algorithme. En effet, le cas $x_0$ étant séparé, nous le faisons hors de la boucle principale. Nous commençons par créer *n_particles* particules selon la loi initiale que nous stockons dans `particles[,,1]`. Nous continuons par calculer les log-poids des particules initiales. Dans cet algorithme, la présence du logarithme est importante pour l'obtention de la log-vraisemblance à la fin de la fonction.
+Nous commençons par l'initialisation de l'algorithme. En effet, le cas $x_0$ étant séparé, nous le faisons hors de la boucle principale. Nous commençons par créer *n_particles* particules selon la loi initiale que nous stockons dans `particles[,,1]`. Puis nous continuons par calculer les log-poids des particules initiales. Dans cet algorithme, la présence du logarithme est importante pour l'obtention de la log-vraisemblance à la fin de la fonction.
 
-``` R
-  log_sum_unnormed_w <- max(log_w0) + log(sum(exp(log_w0 - max(log_w0)))) # log_sum_exp_trick to prevent numerical explosions cf board pictures
+``` r
+  log_sum_unnormed_w <- max(log_w0) + log(sum(exp(log_w0 - max(log_w0))))
+  # log_sum_exp_trick to prevent numerical explosions cf board pictures
   
-  unnormed_log_filtering_weights[1,] <- log_w0 # saving the log initials weights
+  unnormed_log_filtering_weights[1,] <- log_w0
+  # saving the log initials weights
   
-  filtering_weights[1,] <- exp(unnormed_log_filtering_weights[1, ] - log_sum_unnormed_w) # get by the exp the real weight from the log weights
+  filtering_weights[1,] <- exp(unnormed_log_filtering_weights[1, ] - log_sum_unnormed_w) 
+  # get by the exp the real weight from the log weights
 ```
 
-Nous passons par la méthode de la log-somme de l'exponentielle (*log sum exp trick*) pour éviter une explosion des valeurs numériques qui nous empêcherais de récupérer la log-vraisemblance. C'est une raison importante de la présence des log tout le long de la fonction.
+Nous passons par la méthode de la log-somme de l'exponentielle (*log sum exp trick*) pour éviter une explosion des valeurs numériques qui nous empêcherait de récupérer la log-vraisemblance. C'est une raison importante de la présence des log tout le long de la fonction.
 
 Nous continuons en sauvegardant les log-poids initiaux dans `unnormed_log_filtering_weights[1,]` puis en passant les log-poids dans l'exponentielle tout en les normalisant avec la soustraction de la log-somme des poids pour obtenir les vraies valeurs des poids.
 
-``` R
-  log_likelihood <- log_sum_unnormed_w - log(n_particles) # get the log likelihood
+``` r
+  log_likelihood <- log_sum_unnormed_w - log(n_particles)
+  # get the log likelihood
   
-  old_log_sum_unnormed_w <- log_sum_unnormed_w # save the old log weights sums
+  old_log_sum_unnormed_w <- log_sum_unnormed_w
+  # save the old log weights sums
 ```
 
 Le calcul de la log-vraisemblance se fait alors rapidement puis nous gardons les valeurs des vieux poids non normalisés pour pouvoir les réutiliser plus tard.
 
-``` R
+``` r
 for (i in 2:n_obs) # start of the loop
-    log_old_weights <- unnormed_log_filtering_weights[i - 1, ] # keep the old unnormed weigths 
-    current_ESS <-  1 / sum(filtering_weights[i - 1, ]^2) # get ESS in case of SIR or SIR_bis
-    ancestor_indexes <- 1:n_particles # creation of indexes in case of SIR or SIR_bis
+    log_old_weights <- unnormed_log_filtering_weights[i - 1, ] 
+    # keep the old unnormed weigths 
+    current_ESS <-  1 / sum(filtering_weights[i - 1, ]^2) 
+    # get ESS in case of SIR or SIR_bis
+    ancestor_indexes <- 1:n_particles
+    # creation of indexes in case of SIR or SIR_bis
 ```
 
 L'initialisation étant finie nous entrons dans la boucle principale. Nous y resterons jusqu'au `return` final. Elle fait varier un `i` entre $2$ et *n_obs.* Nous remarquons que la valeur initiale dans le cas théorique était $0$ et donc la boucle devrait commencer à $0 + 1$ donc $1$ mais sur R le premier élément est indexé sur $1$ donc il y a un décalage d'une unité.
 
-Une fois rentré dans la boucle, l'itération commence par le stockage des log-poids non normalisés précédents. Puis le calcul de l'ESS afin de pouvoir faire le test pour effectuer -ou non- un resampling. Enfin, l'itération crée un index pour toutes les particules créées. Cet index sera utile en cas de resampling.
+Une fois rentré dans la boucle, l'itération commence par le stockage des log-poids non normalisés précédents. Puis le calcul de l'*ESS* afin de pouvoir faire le test pour effectuer -ou non- un resampling. Enfin, l'itération crée un index pour toutes les particules créées. Cet index sera utile en cas de resampling.
 
-``` R
-if(current_ESS <= threshold){ # compare threshold and ESS -------- threshold = 0 -> SIS | threshold = n_particles + 1 or NULL -> SIR | 0 < threshold < n_particles + 1 -> SIR_bis
-      log_old_weights <- rep(0, n_particles) # reinitialization of a n_particles vector
+``` r
+if(current_ESS <= threshold){ 
+  # compare threshold and ESS -------- 
+  # threshold = 0 -> SIS | 
+  # threshold = n_particles + 1 or NULL -> SIR |
+  # 0 < threshold < n_particles + 1 -> SIR_bis
+      log_old_weights <- rep(0, n_particles)
+      # reinitialization of a n_particles vector
       ancestor_indexes <- sample(1:n_particles,
                                  size = n_particles,
                                  replace = TRUE,
-                                 prob = filtering_weights[i - 1, ]) # sample n_particles from the index ancestor_indexes with probability filtering_weights[i-1,] for each number from the index
+                                 prob = filtering_weights[i - 1, ]) 
+      # sample n_particles from the index ancestor_indexes with 
+      # probability filtering_weights[i-1,] for each number from the index
     }
 ```
 
-Cette condition permet la création de nouvelles particules en cas de resampling. Elle commence, si le resampling est nécessaire, par réinitialiser `log_old_weights` qui contient les anciens poids qui ne sont pas assez équilibrés pour notre méthode puis tire avec une probabilité égale aux poids normalisés *n_particules* valeurs de l'index avec remise dont les particules correspondantes seront utilisés par la suite comme particules.
+Cette condition permet la création de nouvelles particules en cas de resampling. Elle commence, si le resampling est nécessaire, par réinitialiser `log_old_weights` qui contient les anciens poids qui ne sont pas assez équilibrés pour notre méthode puis tire avec une probabilité égale aux poids normalisés *n_particules* valeurs de l'index avec remise dont les particules correspondantes seront utilisées par la suite comme particules.
 
-``` R
-particles[,,i] <- q_proposal$get_transition_samples(ancestors =       particles[ancestor_indexes, ,i - 1], # no change in the case of SIS or SIR_bis with unrealized condition
-                                                    y_obs[i,], 
-                                                    pars) #creation of the next generation of points after the resampling or not  
+``` r
+particles[,,i] <- q_proposal$get_transition_samples(ancestors =
+                                                      particles[ancestor_indexes, ,i - 1], 
+# no change in the case of SIS or SIR_bis with unrealized condition
+                                                      y_obs[i,], 
+                                                      pars) 
+#creation of the next generation of points after the resampling or not  
 
 log_w <- log_old_weights + 
-  log(target_model$get_xt_knowing_y_xtm1(x = particles[,,i], y = y_obs[i,],
-                                         ancestors = particles[ancestor_indexes,,i - 1], pars)) -
+  log(target_model$get_xt_knowing_y_xtm1(x = particles[,,i],
+                                         y = y_obs[i,],
+                                         ancestors = particles[ancestor_indexes,,i - 1],
+                                         pars)) -
   log(q_proposal$get_transition_density(x = particles[,,i], 
                                         y = y_obs[i,],
-                                            ancestors = particles[ancestor_indexes,,i - 1], pars)) # updating the log weights
+                                        ancestors = particles[ancestor_indexes,,i - 1],
+                                        pars)) 
+# updating the log weights
 ```
 
-Ceci fait, nous passons à la création d'une nouvelle génération de points. Nous commençons par générer de nouvelles particules sachant les précédentes génération (`ancestors`) - grâce aux nouvelles particules s'il y a eu resampling ou les anciennes s'il n'y a pas eu - ainsi que les observations (`y_obs`) sous les paramètres (`pars`). De plus, nous calculons les log-poids des particules en question en mettant à jour les poids grâce au précédents en utilisant la somme des log-poids.
+Ceci fait, nous passons à la création d'une nouvelle génération de points. Nous commençons par générer de nouvelles particules sachant les précédentes générations (`ancestors`) - grâce aux nouvelles particules s'il y a eu resampling ou les anciennes s'il n'y a pas eu - ainsi que les observations (`y_obs`) sous les paramètres (`pars`). De plus, nous calculons les log-poids des particules en question en mettant à jour les poids grâce au précédents en utilisant la somme des log-poids.
 
-``` R
-log_sum_unnormed_w <- max(log_w) + log(sum(exp(log_w - max(log_w)))) # Log sum exp trick to prevent numerical explosions cf board pictures
+``` r
+log_sum_unnormed_w <- max(log_w) + log(sum(exp(log_w - max(log_w))))
+# Log sum exp trick to prevent numerical explosions cf board pictures
 
 unnormed_log_filtering_weights[i, ] <- log_w
 
-filtering_weights[i,] <- exp(unnormed_log_filtering_weights[i, ] - log_sum_unnormed_w) # get by the exp the normed real weights from the log weights
+filtering_weights[i,] <- exp(unnormed_log_filtering_weights[i, ] 
+                             - log_sum_unnormed_w)
+# get by the exp the normed real weights from the log weights
 ```
 
-Encore une fois nous utilisons le log sum exp trick pour eviter une explosion numérique des valeurs des log-poids non normalisés. Nous les conservons pour pouvoir récuperer les poids réels normés grâce à la fonction exponentielle.
+Encore une fois nous utilisons le log sum exp trick pour éviter une explosion numérique des valeurs des log-poids non normalisés. Nous les conservons pour pouvoir récupérer les poids réels normés grâce à la fonction exponentielle.
 
-``` R
+``` r
 log_likelihood <- log_likelihood + log_sum_unnormed_w - 
       ifelse(current_ESS <= threshold, 
-             log(n_particles), # if condition not realized ie no resampling, the weights are the same -> classic MC estimator
-             old_log_sum_unnormed_w) # if condition realized ie resampling, the weights are not the same -> estimator SIR with weights' sum
+             log(n_particles),
+             # if condition not realized ie no resampling, the weights are the same
+             # -> classic MC estimator
+             old_log_sum_unnormed_w)
+             # if condition realized ie resampling, the weights are not the same 
+             # -> estimator SIR with weights' sum
     
 ```
 
-Nous pouvons maintenant mettre à jour la log-vraisemblance en la sommant la précédente avec la somme des log-poids non normalisés soustraits de, soit le poids moyen (c'est à dire `log(n_particles)`) dans le cas où il n'y a pas eu de resampling soit les log-poids non normés des particules rééchantillonnées.
+Nous pouvons maintenant mettre à jour la log-vraisemblance en sommant la précédente avec la somme des log-poids non normalisés soustraits de, soit le poids moyen (c'est à dire `log(n_particles)`) dans le cas où il n'y a pas eu de resampling soit les log-poids non normés des particules rééchantillonnées.
 
-``` R
-old_log_sum_unnormed_w <- log_sum_unnormed_w # saving the old weights for the next log likelihood
+``` r
+old_log_sum_unnormed_w <- log_sum_unnormed_w 
+# saving the old weights for the next log likelihood
 ```
 
 Pour finir, nous enregistrons la somme des log-poids non normés pour pouvoir les utiliser lors de la prochaine itération.
 
-``` R
+``` r
  return(list(particles = particles, filtering_weights =  filtering_weights,
               log_likelihood = log_likelihood))
 ```
@@ -271,7 +321,7 @@ Cette fonction retourne les particules, leur poids normé et la log-vraisemblanc
 
 Mis bout à bout le code est le suivant :
 
-``` R
+``` r
 # One code for different method,
 # SIS corresponds to a threshopld of 0 leading to no resampling
 # threshold to n_particles + 1 leads to always resample.
@@ -293,53 +343,93 @@ get_SIR <- function(target_model, # A list with elements .....
   dim_x <- pars$dim_x
 
   particles <- array(NA, dim = c(n_particles, dim_x, n_obs)) # 3 dim matrix
-  unnormed_log_filtering_weights <- filtering_weights <- matrix(0, nrow = n_obs, ncol = n_particles) # n_obs * n_particles matrices
+  unnormed_log_filtering_weights <- filtering_weights <- matrix(0,
+                                                                nrow = n_obs,
+                                                                ncol = n_particles)
+  # n_obs * n_particles matrices
   
-  particles[,,1] <- q_proposal$get_initial_samples(n_particles, pars) # get n_particles initials samples cf n_particles x_0
+  particles[,,1] <- q_proposal$get_initial_samples(n_particles, pars)
+  # get n_particles initials samples cf n_particles x_0
   
-  log_w0 <- log(target_model$get_x0_knowing_y0(particles[,,1], y_obs[1,], pars)) -
-    log(q_proposal$get_initial_density(particles[,,1], pars)) # get the initials log weights for the n_particles x_0 ------- the log is needed to process the log likelihood
+  log_w0 <- log(target_model$get_x0_knowing_y0(particles[,,1],
+                                               y_obs[1,],
+                                               pars)) -
+    log(q_proposal$get_initial_density(particles[,,1],
+                                       pars))
+  # get the initials log weights for the n_particles x_0 
+  # because the log is needed to process the log likelihood
   
-  log_sum_unnormed_w <- max(log_w0) + log(sum(exp(log_w0 - max(log_w0)))) # log_sum_exp_trick to prevent numerical explosions cf board pictures
-  unnormed_log_filtering_weights[1,] <- log_w0 # saving the log initials weights
-  filtering_weights[1,] <- exp(unnormed_log_filtering_weights[1, ] - log_sum_unnormed_w) # get by the exp the real normed weights from the log weights
-  log_likelihood <- log_sum_unnormed_w - log(n_particles) # get the log likelihood
-  old_log_sum_unnormed_w <- log_sum_unnormed_w # save the old log weights sums
+  log_sum_unnormed_w <- max(log_w0) + log(sum(exp(log_w0 - max(log_w0)))) 
+  # log_sum_exp_trick to prevent numerical explosions cf board pictures
+  unnormed_log_filtering_weights[1,] <- log_w0
+  # saving the log initials weights
+  filtering_weights[1,] <- exp(unnormed_log_filtering_weights[1, ]
+                               - log_sum_unnormed_w) 
+  # get by the exp the real normed weights from the log weights
+  log_likelihood <- log_sum_unnormed_w - log(n_particles)
+  # get the log likelihood
+  old_log_sum_unnormed_w <- log_sum_unnormed_w 
+  # save the old log weights sums
   
   for (i in 2:n_obs) { # start of the loop
-    log_old_weights <- unnormed_log_filtering_weights[i - 1, ] # keep the old unnormed weights
-    current_ESS <-  1 / sum(filtering_weights[i - 1, ]^2) # get ESS in case of SIR or SIR_bis
-    ancestor_indexes <- 1:n_particles # creation of indexes in case of SIR or SIR_bis
+    log_old_weights <- unnormed_log_filtering_weights[i - 1, ]
+    # keep the old unnormed weights
+    current_ESS <-  1 / sum(filtering_weights[i - 1, ]^2) 
+    # get ESS in case of SIR or SIR_bis
+    ancestor_indexes <- 1:n_particles
+    # creation of indexes in case of SIR or SIR_bis
     
-    if(current_ESS <= threshold){ # compare threshold and ESS -------- threshold = 0 -> SIS | threshold = n_particles + 1 or NULL -> SIR | 0 < threshold < n_particles + 1 -> SIR_bis
-      log_old_weights <- rep(0, n_particles) # reinitialization of a n_particles vector
+    if(current_ESS <= threshold){
+      # compare threshold and ESS 
+      # threshold = 0 -> SIS | 
+      # threshold = n_particles + 1 or NULL -> SIR |
+      # 0 < threshold < n_particles + 1 -> SIR_bis
+      log_old_weights <- rep(0, n_particles) 
+      # reinitialization of a n_particles vector
       ancestor_indexes <- sample(1:n_particles,
                                  size = n_particles,
                                  replace = TRUE,
-                                 prob = filtering_weights[i - 1, ]) # sample n_particles from the index ancestor_indexes with probability filtering_weights[i-1,] for each number from the index
+                                 prob = filtering_weights[i - 1, ])
+      # sample n_particles from the index ancestor_indexes with
+      # probability filtering_weights[i-1,] for each number from the index
     }
-    particles[,,i] <- q_proposal$get_transition_samples(ancestors = particles[ancestor_indexes, ,i - 1], # no change in the case of SIS or SIR_bis with unrealized condition
+    particles[,,i] <- q_proposal$get_transition_samples(ancestors = 
+                                                        particles[ancestor_indexes, ,i - 1], 
+    # no change in the case of SIS or SIR_bis with unrealized condition
                                                         y_obs[i,], 
-                                                        pars) #creation of the next generation of points after the resampling or not  
+                                                        pars)
+    #creation of the next generation of points after the resampling or not  
     
     log_w <- log_old_weights + 
-      log(target_model$get_xt_knowing_y_xtm1(x = particles[,,i], y = y_obs[i,],
-                                             ancestors = particles[ancestor_indexes,,i - 1], pars)) -
+      log(target_model$get_xt_knowing_y_xtm1(x = particles[,,i],
+                                             y = y_obs[i,],
+                                             ancestors = particles[ancestor_indexes,,i - 1],
+                                             pars)) -
       log(q_proposal$get_transition_density(x = particles[,,i], 
                                             y = y_obs[i,],
-                                            ancestors = particles[ancestor_indexes,,i - 1], pars)) # updating the log weights
+                                            ancestors = particles[ancestor_indexes,,i - 1],
+                                            pars)) 
+    # updating the log weights
     
-    log_sum_unnormed_w <- max(log_w) + log(sum(exp(log_w - max(log_w)))) # Log sum exp trick to prevent numerical explosions cf board pictures
+    log_sum_unnormed_w <- max(log_w) + log(sum(exp(log_w - max(log_w))))
+    # Log sum exp trick to prevent numerical explosions cf board pictures
     unnormed_log_filtering_weights[i, ] <- log_w
-    filtering_weights[i,] <- exp(unnormed_log_filtering_weights[i, ] - log_sum_unnormed_w) # get by the exp the normed real weights from the log weights
+    filtering_weights[i,] <- exp(unnormed_log_filtering_weights[i, ] 
+                                 - log_sum_unnormed_w) 
+    # get by the exp the normed real weights from the log weights
     
     # get the log likelihood
     log_likelihood <- log_likelihood + log_sum_unnormed_w - 
       ifelse(current_ESS <= threshold, 
-             log(n_particles), # if condition not realized ie no resampling, the weights are the same -> classic MC estimator
-             old_log_sum_unnormed_w) # if condition realized ie resampling, the weights are not the same -> estimator SIR with weights' sum
+             log(n_particles), 
+             # if condition not realized ie no resampling, the weights are the same 
+             # -> classic MC estimator
+             old_log_sum_unnormed_w) 
+    # if condition realized ie resampling, the weights are not the same 
+    # -> estimator SIR with weights' sum
     
-    old_log_sum_unnormed_w <- log_sum_unnormed_w # saving the old weights for the next log likelihood
+    old_log_sum_unnormed_w <- log_sum_unnormed_w
+    # saving the old weights for the next log likelihood
   }
   
   return(list(particles = particles, filtering_weights =  filtering_weights,
@@ -347,4 +437,14 @@ get_SIR <- function(target_model, # A list with elements .....
 }
 ```
 
-Nous pouvons aussi comparer avec les résultats d'un filtre de Kalman dans le cas d'un modèle linéaire Gaussien pour verifier sa validité en particulier grâce à la log-vraisemblance calculée grâce à la fonction.
+## Mise en pratique sur un cas déjà connu
+
+Afin, d'étudier les différentes méthodes, nous cherchons à les comparer grâce à l'estimation de la vraisemblance.
+
+Nous avons déjà étudié le cas linéaire gaussien et avons calculé sa likelihood grâce au filtre de Kalman (voir *Etude du filtre et du lissage de Kalman*). Pour notre test, nous avons choisit le cas Bootstrap pour le choix de $q(.)$ c'est-à-dire que $q( .\mid x_{t-1}) = p(x_t\mid x_{t-1})$.
+
+![*Boxplots des vraisemblances pour les différentes méthodes utilisées*](Comparaison%20des%20méthodes%20pour%20la%20vraisemblance.png){fig-align="center"}
+
+Le graphe précédent représente les boxplots des $100$ vraisemblances calculées pour chacune des méthodes décrites plus haut. Nous y voyons aussi une ligne bleu, qui se trouve être la vraisemblance que nous a donné la méthode du filtre de Kalman et des points rouges qui sont les moyennes des vraisemblances des trois méthodes.
+
+Nous voyons sur le graphe que les trois méthodes trouvent plus ou moins bien la vraisemblance mais il n'y bien que la méthode SIR qui se trouve exactement dessus. Nous remarquons aussi que sa variance est moindre comparée aux autres et qu'elle n'admet pas de valeurs extrêmes, ce qui la rend plus robuste. Ce n'est pas le cas pour la méthode SIS qui elle, à cause de sa tendence à ne compter qu'une ou deux particules avec de très gros poids, en compte plusieurs avec des valeurs qui faussent complètement l'estimation, en effet sa moyenne est proche de celle de Kalman mais elle se trouve au bord de sa variance. La méthode adaptative fait office de mesure médiane avec quelques valeurs extrêmes mais conserve une variance raisonnable. Elle pourrait être une mesure utile dans un cas où il faudrait effectuer beaucoup de calcul car elle nécessite moins de resampling pour de résultats corrects.

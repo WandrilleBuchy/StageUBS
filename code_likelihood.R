@@ -1,9 +1,12 @@
 source("utils_kalman_functions.R")
 source("utils_particle_filter_functions.R")
+source("utils_get_toy_dataset_linear_gaussian_HMM.R")
 
-all_result <- read_rds("result_particle_filter.rds")
 
-library(matrixStats)
+
+library(tidyverse)
+library(readr)
+all_results <- read_rds("results_particle_filter.rds")
 
 
 estimate_kalman_loglikelihood_y0n <- function(sim_data, kalman_result, full_pars_list){
@@ -48,18 +51,18 @@ SIR_bis_log_likelihoods <- sapply(1:n_replicates, function(i) {
 bind_rows(data.frame(method = "SIS", ll = SIS_log_likelihoods),
           data.frame(method = "SIR", ll = SIR_log_likelihoods),
           data.frame(method = "SIR_adaptative", ll = SIR_bis_log_likelihoods)) |> 
-  mutate(lik = exp(ll)) |> 
+  mutate(likelihood = exp(ll)) |> 
   group_by(method) |> 
-  mutate(mean_lik = mean(lik)) |> 
+  mutate(mean_likelihood = mean(likelihood)) |> 
   ungroup() |> 
   # filter(method != "SIS") |> 
-  ggplot(aes(x = method, y = lik)) +
+  ggplot(aes(x = method, y = likelihood)) +
   geom_boxplot() + 
-  geom_point(aes(y = mean_lik), color = "red") +
-  geom_hline(yintercept = exp(kalman_likelihood$log_likelihood))
+  geom_point(aes(y = mean_likelihood), color = "red") +
+  geom_hline(yintercept = exp(kalman_likelihood$log_likelihood), color = "blue") +
+  labs(x = "Méthodes utilisées", y = "Vraisemblance")
 
 methods_mean_log_likelihood <- list(SIS_mean_log_likelihood = mean(SIS_log_likelihoods),
                                     SIR_mean_log_likelihood = mean(SIR_log_likelihoods),
                                     SIR_bis_mean_log_likelihood = mean(SIR_bis_log_likelihoods))
 
-boxplot(c(SIS_log_likelihoods,SIR_log_likelihoods,SIR_bis_log_likelihoods))

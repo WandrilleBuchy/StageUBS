@@ -79,8 +79,7 @@ q_proposal <- list(get_initial_density = true_model$get_initial_density,
 
 # Performing particle filter ----------------------------------------------
 
-n_particles = 50
-n_replicates = 500 # Nombre de réplicats des estimateurs
+
 methods <- list(SIS = list(threshold = 0),
                 SIR = list(threshold = n_particles + 1),
                 SIR_bis = list(threshold = n_particles / 2 ))

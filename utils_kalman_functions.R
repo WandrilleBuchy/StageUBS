@@ -41,14 +41,14 @@ get_filtering_kalman <- function(pars, y_obs){
   colnames(marginal_variances) <- paste0("V", 1:pars$dim_x)
   marginal_variances <- as.data.frame(marginal_variances)
   
-  formatted_data <- bind_cols(means, marginal_variances) %>%
-    mutate(index = 1:nrow(.)) %>%
+  formatted_data <- bind_cols(means, marginal_variances)  %>%
+    mutate(index = 1:nrow(.))  %>% 
     pivot_longer(
       cols = -index,
       names_to = c(".value", "dimension"),
       names_pattern = "([MV])(\\d+)"
-    ) %>%
-    rename(mean = M, Var = V) %>%
+    )  %>% 
+    rename(mean = M, Var = V)  %>%
     mutate(lower = mean - 1.96 * sqrt(Var),
            upper = mean + 1.96 * sqrt(Var))
   

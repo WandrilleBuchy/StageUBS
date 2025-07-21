@@ -15,3 +15,5 @@ full_pars_list <- list(dim_x = 1,
 n_obs <- 10
 set.seed(1234)
 sim_data <- get_data(n_steps = n_obs, full_pars_list) #Données 1d
+n_particles = 50
+n_replicates = 100 # Nombre de réplicats des estimateurs
