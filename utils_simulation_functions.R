@@ -7,7 +7,7 @@ get_mat_sqrt <- function(A){
   if(is.null(dim(A))){
     A <- matrix(A)
   }
-  y = eigen(A)
+  y <- eigen(A)
   MCV <- matrix(y$vectors,byrow=F,ncol=dim(A)[1]) #matrice orthogonale de vecteurs propres
   MCVinv <- t(MCV) #transposée de matrice de vecteur propre
   Diag <- diag(y$values, nrow = dim(A)[1]) #matrice diagonale des valeurs propres
@@ -41,7 +41,7 @@ get_data <- function(n_steps, pars){
   y_obs[1, ] <- xy_init$y
   # Propagation
   for (i in 1:(n_steps-1)){ #Boucle de la création des données suivantes
-    xy_next <- get_next_x_y(old_x = x_states[i], pars)
+    xy_next <- get_next_x_y(old_x = x_states[i,], pars)
     x_states[i  + 1, ] <- xy_next$x
     y_obs[i + 1, ] <- xy_next$y
   }

@@ -1,13 +1,4 @@
-
-library(ggplot2)
-library(plot3D)
-library(dplyr)
-library(tibble)
-library(tidyr)
-library(tidyverse)
-library(mixtools)
-
-
+source("get_libraries.R")
 source("utils_get_toy_dataset_linear_gaussian_HMM.R")
 source("utils_kalman_functions.R")
 source("utils_particle_filter_functions.R")
